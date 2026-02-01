@@ -240,7 +240,7 @@ COLORS = {
 STATE_COLORS = {
     "DeepIdle": "#4ECDC4",     # 青绿色
     "Social": "#45B7D1",       # 天蓝色
-    "Video": "#96CEB4",        # 浅绿色
+    "Video": "#795543",        # 浅绿色
     "Gaming": "#FF6B6B",       # 珊瑚红
     "Navigation": "#FFE66D",   # 明黄色
     "Camera": "#DDA0DD",       # 梅红色

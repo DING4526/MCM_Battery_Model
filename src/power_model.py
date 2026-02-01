@@ -114,3 +114,32 @@ def total_power(state_params):
         + gps_power(state_params)
         + background_power(state_params)
     )
+
+
+def power_breakdown(state_params):
+    """
+    返回各子模块功耗分解
+    
+    返回：
+        dict - 包含各子模块功耗的字典：
+            - screen: 屏幕功耗 (W)
+            - cpu: CPU 功耗 (W)
+            - radio: 无线通信功耗 (W)
+            - gps: GPS 功耗 (W)
+            - background: 后台功耗 (W)
+            - total: 总功耗 (W)
+    """
+    p_screen = screen_power(state_params)
+    p_cpu = cpu_power(state_params)
+    p_radio = radio_power(state_params)
+    p_gps = gps_power(state_params)
+    p_bg = background_power(state_params)
+    
+    return {
+        "screen": p_screen,
+        "cpu": p_cpu,
+        "radio": p_radio,
+        "gps": p_gps,
+        "background": p_bg,
+        "total": p_screen + p_cpu + p_radio + p_gps + p_bg,
+    }
