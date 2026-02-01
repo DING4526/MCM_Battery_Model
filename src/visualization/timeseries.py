@@ -575,6 +575,10 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
 # 复合图表2：SOC 对比（带修正 vs 无修正）
 # =====================================================
 
+# 标注位置偏移常量
+ANNOTATION_X_OFFSET_RATIO = 0.1  # 标注 X 轴偏移比例（相对于总时长）
+ANNOTATION_Y_OFFSET = 10        # 标注 Y 轴偏移量（百分比单位）
+
 def plot_soc_comparison(result, save_path=None, show=None):
     """
     绘制 SOC 对比图：带修正的电池电量曲线 vs 无修正的电池电量曲线
@@ -632,7 +636,8 @@ def plot_soc_comparison(result, save_path=None, show=None):
         ax.annotate(
             f'最大差异\n{abs(diff[max_diff_idx]):.1f}%',
             xy=(max_diff_time, (max_diff_soc1 + max_diff_soc2) / 2),
-            xytext=(max_diff_time + max(time_h) * 0.1, (max_diff_soc1 + max_diff_soc2) / 2 + 10),
+            xytext=(max_diff_time + max(time_h) * ANNOTATION_X_OFFSET_RATIO, 
+                    (max_diff_soc1 + max_diff_soc2) / 2 + ANNOTATION_Y_OFFSET),
             fontsize=10, fontweight='bold',
             arrowprops=dict(arrowstyle='->', color='gray', lw=1.5),
             bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', alpha=0.9),
@@ -661,13 +666,20 @@ def plot_soc_comparison(result, save_path=None, show=None):
     ttl_hours = result["TTL"] / 3600
     
     if has_uncorrected:
-        # 找到无修正版本电池耗尽的时间（SOC 首次降到 0）
+        # 计算无修正版本的预计续航时间
+        # 由于仿真在带修正电池耗尽时停止，无修正版本可能还有剩余电量
+        # 使用线性外推估算：TTL_uncorrected = TTL_corrected / (1 - SOC_uncorrected_final)
         soc_uncorr_arr = np.array(result["SOC_uncorrected"])
-        if np.any(soc_uncorr_arr <= 0):
+        final_soc_uncorrected = soc_uncorr_arr[-1]
+        
+        if final_soc_uncorrected <= 0:
+            # 无修正电池也已耗尽，找到首次降到 0 的时间
             ttl_uncorrected_idx = np.where(soc_uncorr_arr <= 0)[0][0]
             ttl_uncorrected = time_h[ttl_uncorrected_idx]
         else:
-            ttl_uncorrected = max(time_h) * (1 / max(soc_uncorr_arr)) if max(soc_uncorr_arr) > 0 else max(time_h)
+            # 无修正电池还有剩余电量，使用线性外推估算
+            # 假设放电速率近似恒定，则 TTL ≈ TTL_current / (1 - SOC_remaining)
+            ttl_uncorrected = ttl_hours / (1 - final_soc_uncorrected)
         
         stats_text = (
             f"📊 对比分析\n"

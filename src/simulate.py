@@ -20,6 +20,12 @@ from usage.control import ScenarioController
 from usage.scenario import *
 
 # =====================================================
+# 常量定义
+# =====================================================
+# 固定标称电压（V），用于无修正版本的 SOC 计算
+NOMINAL_VOLTAGE = 3.7
+
+# =====================================================
 # 单次仿真
 # =====================================================
 def run_simulation(
@@ -76,16 +82,17 @@ def run_simulation(
     )
 
     # ---------- 初始化无修正电池（用于对比） ----------
+    # 无修正电池使用简化模型：
+    # - 无老化损失 (aging_loss=0)
+    # - 无温度修正 (alpha=0，使 f_T(Tb)=1 恒定)
+    # - 固定标称电压 (NOMINAL_VOLTAGE) 替代 OCV-SOC 曲线
     if record_uncorrected:
-        # 无修正电池：无老化损失，固定电压
         battery_uncorrected = BatteryModel(
             SOC0=1.0,
             Tb0=298.15,
-            aging_loss=0.0,  # 无老化修正
-            alpha=0.0,       # 无温度修正
+            aging_loss=0.0,  # 无老化修正：f_A = 1
+            alpha=0.0,       # 无温度修正：f_T(Tb) = 1（alpha=0 时 exp(0)=1）
         )
-        # 固定电压用于简化计算（覆盖 voc 方法）
-        battery_uncorrected._fixed_voltage = 3.7  # 固定标称电压
 
     # ---------- 使用行为控制器 ----------
     controller = ScenarioController(scenario)
@@ -121,9 +128,10 @@ def run_simulation(
         # 更新无修正电池
         if record_uncorrected:
             # 使用简化的 SOC 计算：dSOC/dt = -P / (V_nom * Q_nom)
-            V_nom = 3.7  # 固定标称电压
+            # 其中 V_nom = NOMINAL_VOLTAGE（固定标称电压）
+            # Q_nom = 标称容量（库仑）
             Q_nom = battery_uncorrected.Q_nom
-            dSOC = -P / (V_nom * Q_nom) * dt
+            dSOC = -P / (NOMINAL_VOLTAGE * Q_nom) * dt
             battery_uncorrected.SOC = max(0.0, battery_uncorrected.SOC + dSOC)
 
         if record:
