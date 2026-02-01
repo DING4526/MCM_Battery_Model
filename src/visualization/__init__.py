@@ -39,6 +39,7 @@ from .sensitivity_plot import (
     plot_sensitivity_tornado,
     plot_sensitivity_spider,
     plot_sensitivity_heatmap,
+    plot_sensitivity_comprehensive,
 )
 
 from .comparison import (
@@ -46,6 +47,7 @@ from .comparison import (
     plot_scenario_boxplot,
     plot_scenario_radar,
     plot_multi_scenario_timeline,
+    plot_scenario_comprehensive_comparison,
 )
 
 __all__ = [
@@ -66,6 +68,8 @@ __all__ = [
     "plot_ttl_statistical_summary",
     # 敏感度
     "plot_sensitivity_bar",
+    "plot_sensitivity_comprehensive",
     # 对比
     "plot_scenario_comparison",
+    "plot_scenario_comprehensive_comparison",
 ]
