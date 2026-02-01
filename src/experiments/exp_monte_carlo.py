@@ -246,32 +246,14 @@ def run_convergence_analysis(
     return convergence_results
 
 
-def run_quick_demo():
-    """
-    快速演示 Monte Carlo 仿真
-    """
-    print("\n" + "🚀 快速演示：Monte Carlo 仿真\n")
-    
-    # 基础 Monte Carlo
+
+if __name__ == "__main__":
+    # 简单测试
     results = run_monte_carlo_experiment(
         scenario=SCENARIO_STUDENT_DAILY_MIXED,
         scenario_name="学生日常",
-        n_samples=200,
+        n_samples=100,
         verbose=True,
         visualize=True,
         summary_plot=True,
     )
-    
-    print("\n进行收敛性分析...")
-    convergence_analysis = run_convergence_analysis(
-        scenario=SCENARIO_STUDENT_DAILY_MIXED,
-        scenario_name="学生日常",
-        max_samples=300,
-        step=30,
-        verbose=True,
-        visualize=True,
-    )
-
-
-if __name__ == "__main__":
-    run_quick_demo()

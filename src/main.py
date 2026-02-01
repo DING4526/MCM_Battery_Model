@@ -23,7 +23,7 @@ from experiments import (
 )
 from experiments.exp_monte_carlo import run_convergence_analysis
 from experiments.exp_sensitivity import run_multi_eps_sensitivity
-from experiments.exp_compare import run_sensitivity_to_temperature, run_all_group_comparisons
+from experiments.exp_compare import run_sensitivity_to_temperature
 
 from usage.scenario import *
 from visualization import set_show_plots

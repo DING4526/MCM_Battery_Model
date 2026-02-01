@@ -285,22 +285,13 @@ def run_multi_eps_sensitivity(
     return multi_results
 
 
-def run_quick_demo():
-    """
-    快速演示敏感度分析
-    """
-    print("\n" + "🚀 快速演示：敏感度分析\n")
-    
-    # 基础敏感度分析
+if __name__ == "__main__":
+    # 简单测试
     results = run_sensitivity_experiment(
         scenario=SCENARIO_STUDENT_DAILY_MARKOV,
         scenario_name="学生日常 Markov",
-        n_mc=50,  # 演示用较少样本
+        n_mc=30,
         verbose=True,
         visualize=True,
         comprehensive_plot=True,
     )
-
-
-if __name__ == "__main__":
-    run_quick_demo()

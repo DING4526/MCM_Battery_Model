@@ -123,39 +123,14 @@ def run_basic_experiment(
     return result
 
 
-def run_quick_demo():
-    """
-    快速演示基础仿真
-    """
-    print("\n" + "🚀 快速演示：基础仿真\n")
-    
-    # 测试几个不同场景
-    scenarios = [
-        (SCENARIO_STUDENT_DAILY_MIXED, "学生日常 (Mixed)"),
-        (PURE_GAMING, "纯游戏"),
-        (PURE_VIDEO, "纯视频"),
-    ]
-    
-    for scenario, name in scenarios:
-        result = run_basic_experiment(
-            scenario=scenario,
-            scenario_name=name,
-            seed=42,
-            visualize=False,
-            verbose=True,
-        )
-    
-    # 最后一个显示可视化
-    print("\n显示最后一个场景的可视化...")
-    run_basic_experiment(
+
+if __name__ == "__main__":
+    # 简单测试
+    result = run_basic_experiment(
         scenario=SCENARIO_STUDENT_DAILY_MIXED,
         scenario_name="学生日常",
         seed=42,
         visualize=True,
         dashboard=True,
-        verbose=False,
+        verbose=True,
     )
-
-
-if __name__ == "__main__":
-    run_quick_demo()

@@ -274,58 +274,14 @@ def run_sensitivity_to_temperature(
     return results
 
 
-def run_all_group_comparisons(n_mc=50, verbose=True):
-    """
-    运行所有预定义场景组的对比实验
-    """
-    all_results = {}
-    
-    for group_name in SCENARIO_GROUPS.keys():
-        if verbose:
-            print(f"\n{'='*60}")
-            print(f"场景组: {group_name}")
-            print('='*60)
-        
-        results = run_comparison_experiment(
-            group_name=group_name,
-            n_mc=n_mc,
-            verbose=verbose,
-            visualize=True,
-            comprehensive_plot=True,
-        )
-        
-        all_results[group_name] = results
-    
-    return all_results
 
-
-def run_quick_demo():
-    """
-    快速演示场景对比
-    """
-    print("\n" + "🚀 快速演示：场景对比分析\n")
-    
-    # 日常场景对比
+if __name__ == "__main__":
+    # 简单测试
     results = run_comparison_experiment(
         group_name="日常场景",
-        n_mc=50,
+        n_mc=30,
         verbose=True,
         visualize=True,
         comprehensive_plot=True,
         include_timeline=True,
     )
-    
-    print("\n进行极端场景对比...")
-    
-    # 极端场景对比
-    results_extreme = run_comparison_experiment(
-        group_name="极端场景",
-        n_mc=50,
-        verbose=True,
-        visualize=True,
-        comprehensive_plot=True,
-    )
-
-
-if __name__ == "__main__":
-    run_quick_demo()
