@@ -19,6 +19,7 @@ from .config import (
     to_hours as _to_hours,
     save_figure,
     get_save_path,
+    smart_savefig,
 )
 
 
@@ -77,7 +78,7 @@ def plot_ttl_distribution(ttl_list, ax=None, show=True, save_path=None, bins=20)
     ax.grid(True, alpha=0.3)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -127,7 +128,7 @@ def plot_ttl_boxplot(ttl_list, ax=None, show=True, save_path=None, label="TTL"):
     ax.grid(True, alpha=0.3, axis='y')
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -174,7 +175,7 @@ def plot_ttl_violin(ttl_list, ax=None, show=True, save_path=None, label="TTL"):
     ax.grid(True, alpha=0.3, axis='y')
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -233,7 +234,7 @@ def plot_ttl_kde(ttl_list, ax=None, show=True, save_path=None, fill=True):
     ax.set_ylim(bottom=0)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -366,7 +367,7 @@ def plot_ttl_statistical_summary(ttl_list, save_path=None):
     plt.tight_layout()
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     
     plt.show()
     return fig

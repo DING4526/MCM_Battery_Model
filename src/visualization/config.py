@@ -67,11 +67,33 @@ def get_save_path(filename):
     获取完整的保存路径
     
     参数：
-        filename : str - 文件名
+        filename : str - 文件名或完整路径
     
     返回：
         str - 完整路径
+    
+    说明：
+        - 如果 filename 是绝对路径，直接返回
+        - 如果 filename 只是文件名，则添加默认输出目录
+        - 自动确保输出目录存在
     """
+    if filename is None:
+        return None
+    
+    # 如果是绝对路径，直接返回（但确保目录存在）
+    if os.path.isabs(filename):
+        dir_path = os.path.dirname(filename)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
+        return filename
+    
+    # 如果包含目录分隔符但不是绝对路径，视为相对于当前工作目录
+    if os.path.dirname(filename):
+        dir_path = os.path.dirname(filename)
+        os.makedirs(dir_path, exist_ok=True)
+        return filename
+    
+    # 否则添加默认输出目录
     output_dir = ensure_output_dir()
     return os.path.join(output_dir, filename)
 
@@ -272,12 +294,32 @@ def save_figure(fig, filename, dpi=300, close_after=False):
     """
     save_path = get_save_path(filename)
     fig.savefig(save_path, dpi=dpi, bbox_inches='tight', facecolor='white')
-    print(f"📊 图表已保存: {save_path}")
+    print(f"[Save] 图表已保存: {save_path}")
     
     if close_after:
         plt.close(fig)
     
     return save_path
+
+
+def smart_savefig(save_path, dpi=300):
+    """
+    智能保存当前图表
+    
+    参数：
+        save_path : str - 保存路径或文件名（如果只是文件名，自动添加输出目录）
+        dpi : int - 分辨率
+    
+    返回：
+        str - 保存的完整路径
+    """
+    if save_path is None:
+        return None
+    
+    full_path = get_save_path(save_path)
+    plt.savefig(full_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    print(f"[Save] 图表已保存: {full_path}")
+    return full_path
 
 
 def to_hours(time_list):

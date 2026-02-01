@@ -15,6 +15,7 @@ from .config import (
     get_output_dir,
     get_save_path,
     save_figure,
+    smart_savefig,
     ensure_output_dir,
     get_monospace_font,
     COLORS,

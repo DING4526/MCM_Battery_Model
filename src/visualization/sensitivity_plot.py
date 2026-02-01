@@ -18,6 +18,7 @@ from .config import (
     PARAM_LABELS,
     save_figure,
     get_save_path,
+    smart_savefig,
 )
 
 
@@ -93,7 +94,7 @@ def plot_sensitivity_bar(sens_results, ax=None, show=True, save_path=None,
     ax.legend(handles=legend_elements, loc='lower right', fontsize=9)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -161,7 +162,7 @@ def plot_sensitivity_tornado(sens_results, baseline_ttl, ax=None, show=True,
     ax.grid(True, alpha=0.3, axis='x')
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -209,7 +210,7 @@ def plot_sensitivity_spider(sens_results, ax=None, show=True, save_path=None):
     ax.set_title("参数敏感度蜘蛛图\n（归一化敏感度绝对值）", fontsize=13, fontweight='bold', y=1.1)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -265,7 +266,7 @@ def plot_sensitivity_heatmap(sens_results, ax=None, show=True, save_path=None):
     ax.set_title("参数敏感度热力图", fontsize=13, fontweight='bold')
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -368,7 +369,7 @@ def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
     plt.tight_layout()
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     
     plt.show()
     return fig

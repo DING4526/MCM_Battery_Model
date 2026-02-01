@@ -20,6 +20,7 @@ from .config import (
     to_hours as _to_hours,
     save_figure,
     get_save_path,
+    smart_savefig,
 )
 
 
@@ -98,7 +99,7 @@ def plot_scenario_comparison(comparison_results, ax=None, show=True, save_path=N
     ax.axhline(y=min_val, color='red', linestyle='--', alpha=0.5, linewidth=1)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -156,7 +157,7 @@ def plot_scenario_boxplot(comparison_results, ax=None, show=True, save_path=None
     ax.grid(True, alpha=0.3, axis='y')
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -238,7 +239,7 @@ def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, sa
     ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=9)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -283,7 +284,7 @@ def plot_multi_scenario_timeline(results_dict, ax=None, show=True, save_path=Non
     ax.grid(True, alpha=0.3)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -393,7 +394,7 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
     plt.tight_layout()
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     
     plt.show()
     return fig

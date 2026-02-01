@@ -21,6 +21,7 @@ from .config import (
     to_hours as _to_hours,
     save_figure,
     get_save_path,
+    smart_savefig,
 )
 
 
@@ -65,7 +66,7 @@ def plot_soc_curve(result, ax=None, show=True, save_path=None):
     ax.grid(True, alpha=0.3)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -119,7 +120,7 @@ def plot_power_curve(result, ax=None, show=True, save_path=None):
     ax.grid(True, alpha=0.3)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -168,7 +169,7 @@ def plot_temperature_curve(result, ax=None, show=True, save_path=None, T_amb=298
     ax.grid(True, alpha=0.3)
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -227,7 +228,7 @@ def plot_state_timeline(result, ax=None, show=True, save_path=None):
     ax.set_yticks([])
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     if show:
         plt.tight_layout()
         plt.show()
@@ -241,7 +242,7 @@ def plot_single_run(result, save_path=None):
     
     参数：
         result : dict - 仿真结果
-        save_path : str - 保存路径前缀
+        save_path : str - 保存路径或文件名
     """
     _setup_style()
     
@@ -261,7 +262,7 @@ def plot_single_run(result, save_path=None):
     plt.tight_layout()
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     
     plt.show()
     return fig
@@ -375,7 +376,7 @@ def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15):
     plt.tight_layout()
     
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        smart_savefig(save_path)
     
     plt.show()
     return fig
