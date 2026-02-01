@@ -67,7 +67,7 @@ def run_comparison_experiment(
     
     # 获取场景
     if scenarios is None:
-        if group_name and group_name in SCENARIO_GROUPS:
+        if group_name is not None and group_name in SCENARIO_GROUPS:
             scenarios = SCENARIO_GROUPS[group_name]
         else:
             scenarios = SCENARIO_GROUPS["日常场景"]

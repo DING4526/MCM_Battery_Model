@@ -115,7 +115,12 @@ def run_sensitivity_experiment(
         S = (ttl_plus - ttl_minus) / (2 * eps)
         S_norm = S / ttl_base
         
-        results[p] = {"TTL+": ttl_plus, "TTL-": ttl_minus, "S": S, "S_norm": S_norm}
+        results[p] = {
+            "TTL+": ttl_plus,
+            "TTL-": ttl_minus,
+            "S": S,
+            "S_norm": S_norm,
+        }
     
     if verbose:
         print("-" * 60)

@@ -71,6 +71,8 @@ def run_monte_carlo_experiment(
         "min": np.min(ttl_list),
         "max": np.max(ttl_list),
         "median": np.median(ttl_list),
+        "q1": np.percentile(ttl_list, 25),
+        "q3": np.percentile(ttl_list, 75),
     }
     
     if verbose:

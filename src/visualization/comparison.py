@@ -37,7 +37,7 @@ def _get_color(scenario_name, index):
 # =====================================================
 
 def plot_scenario_comparison(comparison_results, filename=None, subdir="", ax=None, show=None, save_path=None, 
-                              metric="mean", error_bars=True):
+                              error_bars=True):
     """
     绘制场景对比柱状图
     
@@ -48,7 +48,6 @@ def plot_scenario_comparison(comparison_results, filename=None, subdir="", ax=No
         ax : matplotlib.axes.Axes - 可选的绑定轴
         show : bool - 是否显示图形
         save_path : str - 兼容旧接口
-        metric : str - 使用的指标
         error_bars : bool - 是否显示误差棒
     """
     _setup_style()
