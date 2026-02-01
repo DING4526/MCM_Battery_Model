@@ -17,7 +17,8 @@ def oat_sensitivity(results: List[Dict], key: str = "E0", span: float = 0.1):
         dev_plus = dev.copy()
         dev_plus[key] = dev[key] * (1 + span)
         # 线性假设：TTE 与 key 成正比
-        perturb.append(base_TTE * (dev_plus[key] / dev[key]))
+        if dev[key] != 0:
+            perturb.append(base_TTE * (dev_plus[key] / dev[key]))
     if not perturb:
         print("缺少可用参数进行灵敏度分析。")
         return

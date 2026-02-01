@@ -35,6 +35,10 @@ def simulate_day(
         for _ in range(int(steps)):
             p = total_power(params, device, network)
             E_eff = effective_energy(G, T_b, 1 - SOH0, cycles=0, device=device)  # Wh
+            if E_eff <= 1e-9:
+                # 有效能量失效时，直接视为耗尽
+                TTE_hours = time_elapsed_s / 3600
+                return TTE_hours, energy_by_state, energy_by_module
             dSOC = -(p["total"] * dt) / (E_eff * 3600)  # SOC 变化
             SOC += dSOC
             # 热模型更新
@@ -53,4 +57,3 @@ def simulate_day(
 
     TTE_hours = time_elapsed_s / 3600
     return TTE_hours, energy_by_state, energy_by_module
-
