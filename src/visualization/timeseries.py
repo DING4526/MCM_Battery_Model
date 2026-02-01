@@ -633,152 +633,215 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
 
 
 # =====================================================
-# 复合图表2：SOC 对比（带修正 vs 无修正）
+# 复合图表2：SOC 对比（各种修正效果对比）
 # =====================================================
 
-# 标注位置偏移常量
-ANNOTATION_X_OFFSET_RATIO = 0.1  # 标注 X 轴偏移比例（相对于总时长）
-ANNOTATION_Y_OFFSET = 10        # 标注 Y 轴偏移量（百分比单位）
+# =====================================================
+# 复合图表2：SOC 对比（各种修正效果对比）
+# =====================================================
 
 def plot_soc_comparison(result, save_path=None, show=None):
     """
-    绘制 SOC 对比图：带修正的电池电量曲线 vs 无修正的电池电量曲线
-    
-    该图表展示了电压/温度/老化修正对电池续航预测的影响：
-    - 带修正曲线：考虑 OCV-SOC 关系、温度修正、老化修正
-    - 无修正曲线：固定电压、无温度修正、无老化修正
-    
-    参数：
-        result : dict - 仿真结果（需要包含 SOC_uncorrected 数据）
-        save_path : str - 保存路径
-        show : bool - 是否显示图形，None 则使用全局设置
-    
-    返回：
-        fig : matplotlib.figure.Figure - 图表对象
+    绘制 SOC 对比图：展示各种修正对电池电量预测的影响
+
+    曲线（若存在）：
+    - 无修正 SOC_uncorrected
+    - 仅电压 SOC_voltage_only
+    - 仅温度 SOC_temperature_only
+    - 仅老化 SOC_aging_only
+    - 全部修正 SOC（result["SOC"]）
     """
     _setup_style()
-    
-    # 检查是否有无修正数据
-    has_uncorrected = "SOC_uncorrected" in result
-    
-    # 创建图表
-    fig, ax = plt.subplots(figsize=(12, 7))
-    
-    time_h = _to_hours(result["time"])
-    soc_corrected = [s * 100 for s in result["SOC"]]  # 转换为百分比
-    
-    # ===== 带修正的 SOC 曲线 =====
-    ax.plot(time_h, soc_corrected, 
-            color=COLORS["primary"], linewidth=2.5, 
-            label="带修正 (OCV + 温度 + 老化)", zorder=3)
-    ax.fill_between(time_h, 0, soc_corrected, 
-                    alpha=0.2, color=COLORS["primary"])
-    
-    # ===== 无修正的 SOC 曲线 =====
-    if has_uncorrected:
-        soc_uncorrected = [s * 100 for s in result["SOC_uncorrected"]]
-        ax.plot(time_h, soc_uncorrected, 
-                color=COLORS["accent"], linewidth=2.5, linestyle='--',
-                label="无修正 (固定电压)", zorder=3)
-        ax.fill_between(time_h, 0, soc_uncorrected, 
-                        alpha=0.15, color=COLORS["accent"])
-        
-        # 计算差异统计
-        diff = np.array(soc_corrected) - np.array(soc_uncorrected)
-        max_diff = np.max(np.abs(diff))
-        
-        # 在图中标注最大差异点
-        max_diff_idx = np.argmax(np.abs(diff))
-        max_diff_time = time_h[max_diff_idx]
-        max_diff_soc1 = soc_corrected[max_diff_idx]
-        max_diff_soc2 = soc_uncorrected[max_diff_idx]
-        
-        # 绘制差异标注
-        ax.annotate(
-            f'最大差异\n{abs(diff[max_diff_idx]):.1f}%',
-            xy=(max_diff_time, (max_diff_soc1 + max_diff_soc2) / 2),
-            xytext=(max_diff_time + max(time_h) * ANNOTATION_X_OFFSET_RATIO, 
-                    (max_diff_soc1 + max_diff_soc2) / 2 + ANNOTATION_Y_OFFSET),
-            fontsize=10, fontweight='bold',
-            arrowprops=dict(arrowstyle='->', color='gray', lw=1.5),
-            bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', alpha=0.9),
-            zorder=4
-        )
-        
-        # 绘制差异区域填充
-        ax.fill_between(time_h, soc_corrected, soc_uncorrected, 
-                        alpha=0.3, color='gray', label='修正差异区域')
-    
-    # ===== 关键电量线 =====
-    ax.axhline(y=20, color=COLORS["success"], linestyle=':', alpha=0.7, 
-               linewidth=1.5, label="低电量警告 (20%)")
-    ax.axhline(y=5, color='red', linestyle=':', alpha=0.7, 
-               linewidth=1.5, label="极低电量 (5%)")
-    
-    # ===== 图表装饰 =====
-    ax.set_xlabel("时间 (小时)", fontsize=12, fontweight='bold')
-    ax.set_ylabel("电量 SOC (%)", fontsize=12, fontweight='bold')
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    # -----------------------------
+    # 基础时间轴：来自仿真记录（通常到“全部修正耗尽”为止）
+    # -----------------------------
+    t_h = np.asarray(_to_hours(result["time"]), dtype=float)
+    if len(t_h) == 0:
+        raise ValueError("result['time'] 为空，无法绘图。")
+
+    # -----------------------------
+    # 取出各条 SOC（单位：%）
+    # -----------------------------
+    series = []
+
+    def _get_soc_percent(key):
+        if key not in result:
+            return None
+        arr = np.asarray(result[key], dtype=float) * 100.0
+        # 防御：长度对齐到 t_h
+        n = min(len(arr), len(t_h))
+        return arr[:n]
+
+    soc_full = _get_soc_percent("SOC")
+    if soc_full is None:
+        raise ValueError("result['SOC'] 不存在，无法绘图。")
+
+    soc_uncorrected = _get_soc_percent("SOC_uncorrected")
+    soc_voltage = _get_soc_percent("SOC_voltage_only")
+    soc_temp = _get_soc_percent("SOC_temperature_only")
+    soc_aging = _get_soc_percent("SOC_aging_only")
+
+    # -----------------------------
+    # 样式：先“浅/辅助”，后“深/主线”（视觉更协调）
+    # -----------------------------
+    line_styles = {
+        "uncorrected": dict(color="#6C757D", linestyle="-",  linewidth=2.0, alpha=0.90, label="无修正 (基准)"),
+        "voltage":     dict(color="#2E86AB", linestyle="--", linewidth=2.0, alpha=0.90, label="仅电压修正 (OCV)"),
+        "temp":        dict(color="#28A745", linestyle="-.", linewidth=2.0, alpha=0.90, label="仅温度修正"),
+        "aging":       dict(color="#A23B72", linestyle=":",  linewidth=2.4, alpha=0.90, label="仅老化修正"),
+        "full":        dict(color="#C73E1D", linestyle="-",  linewidth=2.8, alpha=0.98, label="全部修正 (OCV+温度+老化)"),
+    }
+
+    # -----------------------------
+    # 核心：每条曲线估计“耗尽时间”，并把曲线补到 (t_end, 0)
+    # -----------------------------
+    def _estimate_end_time_linear(t, soc, tail_points=30):
+        """
+        返回该曲线 SOC 到 0 的时间（小时）。
+        - 如果已经到 0：返回首次 <=0 的 t
+        - 否则：用末段线性外推到 0
+        """
+        soc = np.asarray(soc, dtype=float)
+        t = np.asarray(t, dtype=float)
+
+        # 已经到 0：取首次到 0 的时刻
+        idx0 = np.where(soc <= 0.0)[0]
+        if len(idx0) > 0:
+            return float(t[idx0[0]])
+
+        # 未到 0：末段线性回归 / 斜率外推
+        n = len(soc)
+        k = min(tail_points, n)
+        if k < 2:
+            # 数据太少，退化：无法估计，返回末时刻
+            return float(t[-1])
+
+        tt = t[-k:]
+        yy = soc[-k:]
+
+        # 用最小二乘拟合 yy ≈ a*tt + b
+        A = np.vstack([tt, np.ones_like(tt)]).T
+        a, b = np.linalg.lstsq(A, yy, rcond=None)[0]
+
+        # 如果斜率不为负（异常），就不外推
+        if a >= -1e-9:
+            return float(t[-1])
+
+        # 解 0 = a*t + b -> t = -b/a
+        t_end = -b / a
+
+        # 不允许比当前末时刻更小
+        t_end = max(float(t[-1]), float(t_end))
+        return t_end
+
+    def _extend_curve_to_zero(t, soc, t_end):
+        """
+        把曲线延伸到 (t_end, 0)
+        - 若末点已经是 0：不变
+        - 若 t_end == t[-1]：也不补
+        """
+        t = np.asarray(t, dtype=float)
+        soc = np.asarray(soc, dtype=float)
+
+        if len(soc) == 0:
+            return t, soc
+
+        if soc[-1] <= 0.0 or t_end <= t[-1] + 1e-9:
+            return t, soc
+
+        # 追加一个终点到 0
+        t2 = np.append(t, t_end)
+        soc2 = np.append(soc, 0.0)
+        return t2, soc2
+
+    # 构建要画的序列（按“浅->深”的顺序加入）
+    if soc_uncorrected is not None:
+        series.append(("uncorrected", soc_uncorrected))
+    if soc_voltage is not None:
+        series.append(("voltage", soc_voltage))
+    if soc_temp is not None:
+        series.append(("temp", soc_temp))
+    if soc_aging is not None:
+        series.append(("aging", soc_aging))
+    # 主线最后
+    series.append(("full", soc_full))
+
+    # 估计每条曲线的耗尽时间，并扩展
+    extended = []
+    end_times = []
+
+    for name, soc in series:
+        t_end = _estimate_end_time_linear(t_h, soc, tail_points=30)
+        t_ext, soc_ext = _extend_curve_to_zero(t_h, soc, t_end)
+        extended.append((name, t_ext, soc_ext, t_end))
+        end_times.append(t_end)
+
+    # ✅ 横轴上限 = 所有曲线耗尽时间最大值（你要的“最大时间”）
+    x_max = max(end_times) if len(end_times) else float(t_h[-1])
+
+    # -----------------------------
+    # 绘图
+    # -----------------------------
+    fig, ax = plt.subplots(figsize=(13, 7))
+
+    for name, t_ext, soc_ext, t_end in extended:
+        ax.plot(t_ext, soc_ext, zorder=3 if name == "full" else 2, **line_styles[name])
+
+    # 关键电量线（每种阈值各一条线）
+    ax.axhline(y=20, color="#F39C12", linestyle=":", alpha=0.70, linewidth=1.3, label="低电量警告 (20%)")
+    ax.axhline(y=5,  color="#E74C3C", linestyle=":", alpha=0.70, linewidth=1.3, label="极低电量 (5%)")
+
+    ax.set_xlabel("时间 (小时)", fontsize=12, fontweight="bold")
+    ax.set_ylabel("电量 SOC (%)", fontsize=12, fontweight="bold")
     ax.set_ylim(0, 105)
-    ax.set_xlim(0, max(time_h))
-    ax.grid(True, alpha=0.3, linestyle='-')
-    ax.legend(loc='upper right', fontsize=10, framealpha=0.95)
-    
-    # ===== 添加统计信息文本框 =====
-    ttl_hours = result["TTL"] / 3600
-    
-    if has_uncorrected:
-        # 计算无修正版本的预计续航时间
-        # 由于仿真在带修正电池耗尽时停止，无修正版本可能还有剩余电量
-        # 使用线性外推估算：TTL_uncorrected = TTL_corrected / (1 - SOC_uncorrected_final)
-        soc_uncorr_arr = np.array(result["SOC_uncorrected"])
-        final_soc_uncorrected = soc_uncorr_arr[-1]
-        
-        if final_soc_uncorrected <= 0:
-            # 无修正电池也已耗尽，找到首次降到 0 的时间
-            ttl_uncorrected_idx = np.where(soc_uncorr_arr <= 0)[0][0]
-            ttl_uncorrected = time_h[ttl_uncorrected_idx]
-        else:
-            # 无修正电池还有剩余电量，使用线性外推估算
-            # 假设放电速率近似恒定，则 TTL ≈ TTL_current / (1 - SOC_remaining)
-            ttl_uncorrected = ttl_hours / (1 - final_soc_uncorrected)
-        
-        stats_text = (
-            f"📊 对比分析\n"
-            f"─────────────\n"
-            f"带修正续航: {ttl_hours:.2f} h\n"
-            f"无修正续航: {ttl_uncorrected:.2f} h\n"
-            f"差异: {abs(ttl_hours - ttl_uncorrected):.2f} h\n"
-            f"最大SOC差: {max_diff:.1f}%"
-        )
-    else:
-        stats_text = (
-            f"📊 仿真结果\n"
-            f"─────────────\n"
-            f"续航时间: {ttl_hours:.2f} h\n"
-            f"（无对比数据）"
-        )
-    
-    # 统计信息框放在左上角
-    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=11,
-            verticalalignment='top', horizontalalignment='left',
-            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
-                      alpha=0.95, edgecolor='gray'),
-            family='monospace')
-    
-    # ===== 标题 =====
-    ax.set_title(
-        "🔋 电池电量变化对比：带修正 vs 无修正",
-        fontsize=14, fontweight='bold', pad=15
+    ax.set_xlim(0, x_max)  # ✅ 关键修复：最大时间
+    ax.grid(True, alpha=0.25, linestyle="-")
+
+    ax.set_title("电池电量变化对比：各修正因子效果分析", fontsize=14, fontweight="bold", pad=15)
+    ax.legend(loc="upper right", fontsize=9, framealpha=0.95, ncol=1)
+
+    # -----------------------------
+    # 统计信息框（用每条曲线的 t_end）
+    # -----------------------------
+    # 取出对应耗尽时间（方便展示）
+    ttl_map = {name: t_end for (name, _, _, t_end) in extended}
+
+    lines = [
+        "对比分析",
+        "─" * 16,
+        f"全部修正: {ttl_map.get('full', np.nan):.2f} h",
+    ]
+    if "voltage" in ttl_map:
+        lines.append(f"仅电压:   {ttl_map['voltage']:.2f} h")
+    if "temp" in ttl_map:
+        lines.append(f"仅温度:   {ttl_map['temp']:.2f} h")
+    if "aging" in ttl_map:
+        lines.append(f"仅老化:   {ttl_map['aging']:.2f} h")
+    if "uncorrected" in ttl_map:
+        lines.append(f"无修正:   {ttl_map['uncorrected']:.2f} h")
+
+    stats_text = "\n".join(lines)
+
+    ax.text(
+        0.02, 0.02, stats_text,
+        transform=ax.transAxes, fontsize=10,
+        verticalalignment="bottom", horizontalalignment="left",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="white", alpha=0.95, edgecolor="gray"),
+        family="monospace"
     )
-    
+
     plt.tight_layout()
-    
+
     if save_path:
         smart_savefig(save_path)
-    
+
     if show is None:
         show = get_show_plots()
     if show:
         plt.show()
-    
+
     return fig
+
