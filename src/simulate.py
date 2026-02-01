@@ -47,7 +47,7 @@ def run_simulation(
         seed : int - 随机种子
         record : bool - 是否记录时间序列
         record_breakdown : bool - 是否记录子模块功耗分解
-        record_uncorrected : bool - 是否记录无修正版本的 SOC
+        record_uncorrected : bool - 是否记录各种修正版本的 SOC 对比
 
     Returns
     -------
@@ -66,7 +66,10 @@ def run_simulation(
           "Power_gps": [...],
           "Power_background": [...],
           # 如果 record_uncorrected=True:
-          "SOC_uncorrected": [...]  # 无电压/温度/老化修正的 SOC
+          "SOC_uncorrected": [...],     # 完全无修正（固定电压、无温度、无老化）
+          "SOC_voltage_only": [...],    # 仅电压修正（OCV-SOC曲线，无温度、无老化）
+          "SOC_temperature_only": [...], # 仅温度修正（固定电压，有温度，无老化）
+          "SOC_aging_only": [...]       # 仅老化修正（固定电压，无温度，有老化）
         }
     """
 
@@ -87,11 +90,36 @@ def run_simulation(
     # - 无温度修正 (alpha=0，使 f_T(Tb)=1 恒定)
     # - 固定标称电压 (NOMINAL_VOLTAGE) 替代 OCV-SOC 曲线
     if record_uncorrected:
+        # 完全无修正的电池
         battery_uncorrected = BatteryModel(
             SOC0=1.0,
             Tb0=298.15,
             aging_loss=0.0,  # 无老化修正：f_A = 1
             alpha=0.0,       # 无温度修正：f_T(Tb) = 1（alpha=0 时 exp(0)=1）
+        )
+        
+        # 仅电压修正的电池（使用 OCV-SOC 曲线，但无温度和老化修正）
+        battery_voltage_only = BatteryModel(
+            SOC0=1.0,
+            Tb0=298.15,
+            aging_loss=0.0,  # 无老化修正
+            alpha=0.0,       # 无温度修正
+        )
+        
+        # 仅温度修正的电池（使用固定电压，但有温度修正，无老化修正）
+        battery_temperature_only = BatteryModel(
+            SOC0=1.0,
+            Tb0=298.15,
+            aging_loss=0.0,  # 无老化修正
+            alpha=0.03,      # 有温度修正（使用默认 alpha）
+        )
+        
+        # 仅老化修正的电池（使用固定电压，无温度修正，但有老化修正）
+        battery_aging_only = BatteryModel(
+            SOC0=1.0,
+            Tb0=298.15,
+            aging_loss=0.15, # 有老化修正
+            alpha=0.0,       # 无温度修正
         )
 
     # ---------- 使用行为控制器 ----------
@@ -113,6 +141,9 @@ def run_simulation(
     
     # 无修正 SOC 记录
     soc_uncorrected_list = []
+    soc_voltage_only_list = []
+    soc_temperature_only_list = []
+    soc_aging_only_list = []
 
     t = 0.0
 
@@ -127,12 +158,29 @@ def run_simulation(
         
         # 更新无修正电池
         if record_uncorrected:
-            # 使用简化的 SOC 计算：dSOC/dt = -P / (V_nom * Q_nom)
-            # 其中 V_nom = NOMINAL_VOLTAGE（固定标称电压）
-            # Q_nom = 标称容量（库仑）
+            # 完全无修正：使用固定电压
+            # dSOC/dt = -P / (V_nom * Q_nom)
             Q_nom = battery_uncorrected.Q_nom
             dSOC = -P / (NOMINAL_VOLTAGE * Q_nom) * dt
             battery_uncorrected.SOC = max(0.0, battery_uncorrected.SOC + dSOC)
+            
+            # 仅电压修正：使用 OCV-SOC 曲线（需要调用 voc 方法）
+            V_oc = battery_voltage_only.voc(battery_voltage_only.SOC)
+            Q_eff_v = battery_voltage_only.Q_nom  # 无温度和老化修正，Q_eff = Q_nom
+            dSOC_v = -P / (V_oc * Q_eff_v) * dt
+            battery_voltage_only.SOC = max(0.0, battery_voltage_only.SOC + dSOC_v)
+            
+            # 仅温度修正：使用固定电压，但应用温度修正因子
+            # 需要同步更新温度
+            battery_temperature_only.Tb = battery.Tb  # 同步主电池的温度
+            Q_eff_t = battery_temperature_only.Q_nom * battery_temperature_only.temperature_factor(battery.Tb)
+            dSOC_t = -P / (NOMINAL_VOLTAGE * Q_eff_t) * dt
+            battery_temperature_only.SOC = max(0.0, battery_temperature_only.SOC + dSOC_t)
+            
+            # 仅老化修正：使用固定电压，应用老化修正因子
+            Q_eff_a = battery_aging_only.Q_nom * battery_aging_only.fA  # f_A = 1 - aging_loss
+            dSOC_a = -P / (NOMINAL_VOLTAGE * Q_eff_a) * dt
+            battery_aging_only.SOC = max(0.0, battery_aging_only.SOC + dSOC_a)
 
         if record:
             time_list.append(t)
@@ -153,6 +201,9 @@ def run_simulation(
             # 记录无修正 SOC
             if record_uncorrected:
                 soc_uncorrected_list.append(battery_uncorrected.SOC)
+                soc_voltage_only_list.append(battery_voltage_only.SOC)
+                soc_temperature_only_list.append(battery_temperature_only.SOC)
+                soc_aging_only_list.append(battery_aging_only.SOC)
 
         t += dt
 
@@ -181,6 +232,9 @@ def run_simulation(
         if record_uncorrected:
             result.update({
                 "SOC_uncorrected": soc_uncorrected_list,
+                "SOC_voltage_only": soc_voltage_only_list,
+                "SOC_temperature_only": soc_temperature_only_list,
+                "SOC_aging_only": soc_aging_only_list,
             })
 
     return result
