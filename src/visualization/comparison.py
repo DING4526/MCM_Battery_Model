@@ -21,6 +21,7 @@ from .config import (
     save_figure,
     get_save_path,
     smart_savefig,
+    get_show_plots,
 )
 
 
@@ -35,18 +36,18 @@ def _get_color(scenario_name, index):
 # 场景对比可视化函数
 # =====================================================
 
-def plot_scenario_comparison(comparison_results, ax=None, show=True, save_path=None, 
-                              metric="mean", error_bars=True):
+def plot_scenario_comparison(comparison_results, filename=None, subdir="", ax=None, show=None, save_path=None, 
+                              error_bars=True):
     """
     绘制场景对比柱状图
     
     参数：
         comparison_results : dict - 对比结果
-            {scenario_name: {"ttl_list": [...], "mean": float, "std": float, ...}}
+        filename : str - 保存文件名
+        subdir : str - 输出子目录
         ax : matplotlib.axes.Axes - 可选的绑定轴
         show : bool - 是否显示图形
-        save_path : str - 保存路径
-        metric : str - 使用的指标 ("mean", "median")
+        save_path : str - 兼容旧接口
         error_bars : bool - 是否显示误差棒
     """
     _setup_style()
@@ -56,52 +57,37 @@ def plot_scenario_comparison(comparison_results, ax=None, show=True, save_path=N
     
     scenarios = list(comparison_results.keys())
     
-    # 获取指标值
-    if metric == "mean":
-        values = [comparison_results[s]["mean"] / 3600 for s in scenarios]
-        errors = [comparison_results[s]["std"] / 3600 for s in scenarios] if error_bars else None
-        ylabel = "平均续航时间 (小时)"
-    else:
-        values = [comparison_results[s]["median"] / 3600 for s in scenarios]
-        q1 = [comparison_results[s]["q1"] / 3600 for s in scenarios]
-        q3 = [comparison_results[s]["q3"] / 3600 for s in scenarios]
-        errors = [[v - q1[i] for i, v in enumerate(values)],
-                  [q3[i] - v for i, v in enumerate(values)]] if error_bars else None
-        ylabel = "中位数续航时间 (小时)"
+    values = [comparison_results[s]["mean"] / 3600 for s in scenarios]
+    errors = [comparison_results[s]["std"] / 3600 for s in scenarios] if error_bars else None
     
-    # 颜色
     colors = [_get_color(s, i) for i, s in enumerate(scenarios)]
     
-    # 绘制柱状图
     x = range(len(scenarios))
-    bars = ax.bar(x, values, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+    bars = ax.bar(x, values, color=colors, alpha=0.8, edgecolor='white')
     
-    # 误差棒
     if error_bars and errors:
-        ax.errorbar(x, values, yerr=errors, fmt='none', color='black', capsize=5, linewidth=1.5)
+        ax.errorbar(x, values, yerr=errors, fmt='none', color='black', capsize=5)
     
-    # 添加数值标签
     for bar, val in zip(bars, values):
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                f'{val:.2f}h', ha='center', va='bottom', fontsize=10, fontweight='bold')
+        ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.1,
+                f'{val:.2f}h', ha='center', va='bottom', fontsize=10)
     
     ax.set_xticks(x)
-    ax.set_xticklabels(scenarios, rotation=15, ha='right', fontsize=10)
-    ax.set_ylabel(ylabel, fontsize=11)
-    ax.set_title("不同使用场景续航时间对比", fontsize=13, fontweight='bold')
+    ax.set_xticklabels(scenarios, rotation=15, ha='right')
+    ax.set_ylabel("平均续航时间 (小时)")
+    ax.set_title("不同使用场景续航时间对比")
     ax.grid(True, alpha=0.3, axis='y')
     
-    # 添加参考线（最佳和最差）
-    max_val = max(values)
-    min_val = min(values)
-    ax.axhline(y=max_val, color='green', linestyle='--', alpha=0.5, linewidth=1)
-    ax.axhline(y=min_val, color='red', linestyle='--', alpha=0.5, linewidth=1)
+    plt.tight_layout()
     
-    if save_path:
+    if filename:
+        smart_savefig(filename, subdir)
+    elif save_path:
         smart_savefig(save_path)
+    
+    if show is None:
+        show = get_show_plots()
     if show:
-        plt.tight_layout()
         plt.show()
     
     return ax
@@ -292,20 +278,17 @@ def plot_multi_scenario_timeline(results_dict, ax=None, show=True, save_path=Non
     return ax
 
 
-def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None, save_path=None):
+def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None, filename=None, subdir="", save_path=None, show=None):
     """
-    绘制场景对比综合图表（比赛级别可视化）
-    
-    包含：
-    - 柱状图对比
-    - 箱线图分布
-    - 时间线对比（如有）
-    - 统计表格
+    绘制场景对比综合图表
     
     参数：
         comparison_results : dict - Monte Carlo 对比结果
         results_dict : dict - 单次仿真结果（可选）
-        save_path : str - 保存路径
+        filename : str - 保存文件名
+        subdir : str - 输出子目录
+        save_path : str - 兼容旧接口
+        show : bool - 是否显示图形
     """
     _setup_style()
     
@@ -393,8 +376,14 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
     
     plt.tight_layout()
     
-    if save_path:
+    if filename:
+        smart_savefig(filename, subdir)
+    elif save_path:
         smart_savefig(save_path)
     
-    plt.show()
+    if show is None:
+        show = get_show_plots()
+    if show:
+        plt.show()
+    
     return fig
