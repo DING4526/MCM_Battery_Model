@@ -63,8 +63,8 @@ class BatteryModel:
 
         # ===== 热学参数 =====
         C_th: float = 60.0,           # 等效热容（J/K）
-        h: float = 1.0,               # 散热系数（W/K）
-        eta_heat: float = 0.85,       # 功耗转化为热的比例
+        h: float = 0.15,               # 散热系数（W/K）
+        eta_heat: float = 0.65,       # 功耗转化为热的比例
 
         # ===== 温度与老化 =====
         T_ref: float = 298.15,        # 参考温度（K）
