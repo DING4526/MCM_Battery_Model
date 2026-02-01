@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
-code.txt
+*.txt
 codegen.py
 
 # 输出目录

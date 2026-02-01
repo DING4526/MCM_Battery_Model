@@ -19,6 +19,7 @@ from .config import (
     save_figure,
     get_save_path,
     smart_savefig,
+    get_show_plots,
 )
 
 
@@ -31,16 +32,18 @@ def _get_label(param):
 # 敏感度可视化函数
 # =====================================================
 
-def plot_sensitivity_bar(sens_results, ax=None, show=True, save_path=None, 
+def plot_sensitivity_bar(sens_results, filename=None, subdir="", ax=None, show=None, save_path=None, 
                          normalized=True, sort=True):
     """
     绘制敏感度柱状图
     
     参数：
         sens_results : dict - 敏感度分析结果
+        filename : str - 保存文件名
+        subdir : str - 输出子目录
         ax : matplotlib.axes.Axes - 可选的绑定轴
         show : bool - 是否显示图形
-        save_path : str - 保存路径
+        save_path : str - 兼容旧接口
         normalized : bool - 是否使用归一化敏感度
         sort : bool - 是否按敏感度排序
     """
@@ -49,13 +52,13 @@ def plot_sensitivity_bar(sens_results, ax=None, show=True, save_path=None,
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
     
-    # 准备数据
-    params = list(sens_results.keys())
+    # 准备数据（排除内部字段）
+    params = [p for p in sens_results.keys() if not p.startswith('_')]
     if normalized:
         values = [sens_results[p]["S_norm"] for p in params]
-        ylabel = "归一化敏感度 (ΔT/T / Δp/p)"
+        ylabel = "归一化敏感度"
     else:
-        values = [sens_results[p]["S"] / 3600 for p in params]  # 转换为小时
+        values = [sens_results[p]["S"] / 3600 for p in params]
         ylabel = "敏感度 (小时)"
     
     labels = [_get_label(p) for p in params]
@@ -73,12 +76,6 @@ def plot_sensitivity_bar(sens_results, ax=None, show=True, save_path=None,
     # 绘制柱状图
     bars = ax.barh(range(len(params)), values, color=colors, alpha=0.8, edgecolor='white')
     
-    # 添加数值标签
-    for bar, val in zip(bars, values):
-        width = bar.get_width()
-        ax.text(width + 0.01 * max(np.abs(values)), bar.get_y() + bar.get_height()/2,
-                f'{val:.3f}', ha='left' if val >= 0 else 'right', va='center', fontsize=9)
-    
     ax.set_yticks(range(len(params)))
     ax.set_yticklabels(labels)
     ax.set_xlabel(ylabel, fontsize=11)
@@ -86,17 +83,16 @@ def plot_sensitivity_bar(sens_results, ax=None, show=True, save_path=None,
     ax.axvline(x=0, color='black', linewidth=0.8)
     ax.grid(True, alpha=0.3, axis='x')
     
-    # 图例
-    legend_elements = [
-        Patch(facecolor=COLORS["danger"], alpha=0.8, label='负敏感度（参数↑→TTL↓）'),
-        Patch(facecolor=COLORS["success"], alpha=0.8, label='正敏感度（参数↑→TTL↑）')
-    ]
-    ax.legend(handles=legend_elements, loc='lower right', fontsize=9)
+    plt.tight_layout()
     
-    if save_path:
+    if filename:
+        smart_savefig(filename, subdir)
+    elif save_path:
         smart_savefig(save_path)
+    
+    if show is None:
+        show = get_show_plots()
     if show:
-        plt.tight_layout()
         plt.show()
     
     return ax
@@ -274,20 +270,17 @@ def plot_sensitivity_heatmap(sens_results, ax=None, show=True, save_path=None):
     return ax
 
 
-def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
+def plot_sensitivity_comprehensive(sens_results, baseline_ttl, filename=None, subdir="", save_path=None, show=None):
     """
-    绘制敏感度分析综合图表（比赛级别可视化）
-    
-    包含：
-    - 柱状图
-    - 龙卷风图
-    - 蜘蛛图
-    - 统计面板
+    绘制敏感度分析综合图表
     
     参数：
         sens_results : dict - 敏感度分析结果
         baseline_ttl : float - 基准 TTL（秒）
-        save_path : str - 保存路径
+        filename : str - 保存文件名
+        subdir : str - 输出子目录
+        save_path : str - 兼容旧接口
+        show : bool - 是否显示图形
     """
     _setup_style()
     
@@ -368,8 +361,14 @@ def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
     
     plt.tight_layout()
     
-    if save_path:
+    if filename:
+        smart_savefig(filename, subdir)
+    elif save_path:
         smart_savefig(save_path)
     
-    plt.show()
+    if show is None:
+        show = get_show_plots()
+    if show:
+        plt.show()
+    
     return fig
