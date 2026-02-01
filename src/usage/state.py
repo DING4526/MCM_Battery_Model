@@ -3,8 +3,8 @@ import copy
 
 DEVICE_PARAMS = {
     "A": 45.0,
-    "p_u": 0.0008,
-    "P_base60": 0.10,
+    "p_u": 0.01,
+    "P_base60": 0.30,
     "kappa": 0.25,
     "P_off": 0.02,
 
@@ -54,10 +54,16 @@ USAGE_STATES = {
         "lambda_cell": 0.8, "delta_signal": 0.3,
         "r_on": 0.8, "r_bg": 0.15,
     },
+    "Camera": {
+        "s": 1, "u": 0.85, "r": 60, "u_cpu": 0.75,
+        "R_i": 0.1, "R_a": 0.6, "R_t": 0.3,
+        "lambda_cell": 0.7, "delta_signal": 0.25,
+        "r_on": 0.9, "r_bg": 0.25,
+},
 }
 
 
 def get_state_params(state_name):
-    params = copy.deepcopy(DEVICE_PARAMS)
+    params = dict(DEVICE_PARAMS)
     params.update(USAGE_STATES[state_name])
     return params
