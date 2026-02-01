@@ -21,6 +21,7 @@ from .config import (
     save_figure,
     get_save_path,
     smart_savefig,
+    get_show_plots,
 )
 
 
@@ -292,7 +293,7 @@ def plot_multi_scenario_timeline(results_dict, ax=None, show=True, save_path=Non
     return ax
 
 
-def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None, save_path=None):
+def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None, save_path=None, show=None):
     """
     绘制场景对比综合图表（比赛级别可视化）
     
@@ -306,6 +307,7 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
         comparison_results : dict - Monte Carlo 对比结果
         results_dict : dict - 单次仿真结果（可选）
         save_path : str - 保存路径
+        show : bool - 是否显示图形，None 则使用全局设置
     """
     _setup_style()
     
@@ -396,5 +398,10 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
     if save_path:
         smart_savefig(save_path)
     
-    plt.show()
+    # 使用参数或全局设置决定是否显示
+    if show is None:
+        show = get_show_plots()
+    if show:
+        plt.show()
+    
     return fig

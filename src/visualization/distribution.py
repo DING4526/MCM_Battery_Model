@@ -20,6 +20,7 @@ from .config import (
     save_figure,
     get_save_path,
     smart_savefig,
+    get_show_plots,
 )
 
 
@@ -242,7 +243,7 @@ def plot_ttl_kde(ttl_list, ax=None, show=True, save_path=None, fill=True):
     return ax
 
 
-def plot_ttl_statistical_summary(ttl_list, save_path=None):
+def plot_ttl_statistical_summary(ttl_list, save_path=None, show=None):
     """
     绘制 TTL 综合统计摘要图（比赛级别可视化）
     
@@ -255,6 +256,7 @@ def plot_ttl_statistical_summary(ttl_list, save_path=None):
     参数：
         ttl_list : list - TTL 列表（秒）
         save_path : str - 保存路径
+        show : bool - 是否显示图形，None 则使用全局设置
     """
     _setup_style()
     
@@ -369,5 +371,10 @@ def plot_ttl_statistical_summary(ttl_list, save_path=None):
     if save_path:
         smart_savefig(save_path)
     
-    plt.show()
+    # 使用参数或全局设置决定是否显示
+    if show is None:
+        show = get_show_plots()
+    if show:
+        plt.show()
+    
     return fig

@@ -22,6 +22,7 @@ from .config import (
     save_figure,
     get_save_path,
     smart_savefig,
+    get_show_plots,
 )
 
 
@@ -236,13 +237,14 @@ def plot_state_timeline(result, ax=None, show=True, save_path=None):
     return ax
 
 
-def plot_single_run(result, save_path=None):
+def plot_single_run(result, save_path=None, show=None):
     """
     绘制单次仿真的基础图表（SOC + 功耗）
     
     参数：
         result : dict - 仿真结果
         save_path : str - 保存路径或文件名
+        show : bool - 是否显示图形，None 则使用全局设置
     """
     _setup_style()
     
@@ -264,11 +266,16 @@ def plot_single_run(result, save_path=None):
     if save_path:
         smart_savefig(save_path)
     
-    plt.show()
+    # 使用参数或全局设置决定是否显示
+    if show is None:
+        show = get_show_plots()
+    if show:
+        plt.show()
+    
     return fig
 
 
-def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15):
+def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15, show=None):
     """
     绘制综合仪表板（比赛级别可视化）
     
@@ -283,6 +290,7 @@ def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15):
         result : dict - 仿真结果
         save_path : str - 保存路径
         T_amb : float - 环境温度（K）
+        show : bool - 是否显示图形，None 则使用全局设置
     """
     _setup_style()
     
@@ -378,5 +386,10 @@ def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15):
     if save_path:
         smart_savefig(save_path)
     
-    plt.show()
+    # 使用参数或全局设置决定是否显示
+    if show is None:
+        show = get_show_plots()
+    if show:
+        plt.show()
+    
     return fig

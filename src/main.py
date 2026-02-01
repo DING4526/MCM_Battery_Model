@@ -26,6 +26,7 @@ from experiments.exp_sensitivity import run_multi_eps_sensitivity
 from experiments.exp_compare import run_sensitivity_to_temperature, run_all_group_comparisons
 
 from usage.scenario import *
+from visualization import set_show_plots
 
 
 # =====================================================
@@ -237,8 +238,15 @@ def main():
   
   # 运行快速演示
   python main.py demo --type all
+  
+  # 只保存图片不弹窗
+  python main.py --no-show basic --scenario student_daily --save output
         """
     )
+    
+    # 全局选项：控制是否弹出图形窗口
+    parser.add_argument("--no-show", action="store_true", 
+                        help="不弹出图形窗口（只保存图片）")
     
     subparsers = parser.add_subparsers(dest="command", help="实验类型")
     
@@ -312,6 +320,10 @@ def main():
         print_banner()
         parser.print_help()
         return
+    
+    # 设置全局显示选项
+    if args.no_show:
+        set_show_plots(False)
     
     print_banner()
     args.func(args)

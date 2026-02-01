@@ -19,6 +19,7 @@ from .config import (
     save_figure,
     get_save_path,
     smart_savefig,
+    get_show_plots,
 )
 
 
@@ -274,7 +275,7 @@ def plot_sensitivity_heatmap(sens_results, ax=None, show=True, save_path=None):
     return ax
 
 
-def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
+def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None, show=None):
     """
     绘制敏感度分析综合图表（比赛级别可视化）
     
@@ -288,6 +289,7 @@ def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
         sens_results : dict - 敏感度分析结果
         baseline_ttl : float - 基准 TTL（秒）
         save_path : str - 保存路径
+        show : bool - 是否显示图形，None 则使用全局设置
     """
     _setup_style()
     
@@ -371,5 +373,10 @@ def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
     if save_path:
         smart_savefig(save_path)
     
-    plt.show()
+    # 使用参数或全局设置决定是否显示
+    if show is None:
+        show = get_show_plots()
+    if show:
+        plt.show()
+    
     return fig

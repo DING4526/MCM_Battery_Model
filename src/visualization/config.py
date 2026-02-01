@@ -21,6 +21,25 @@ DEFAULT_OUTPUT_DIR = "output/figures"
 # 全局输出目录（可通过 set_output_dir 修改）
 _output_dir = None
 
+# 全局显示控制（可通过 set_show_plots 修改）
+_show_plots = True
+
+
+def set_show_plots(show: bool):
+    """
+    设置是否调用 plt.show()
+    
+    参数：
+        show : bool - True 则显示图形窗口，False 则不显示
+    """
+    global _show_plots
+    _show_plots = show
+
+
+def get_show_plots() -> bool:
+    """获取当前是否显示图形窗口"""
+    return _show_plots
+
 
 def get_output_dir():
     """
