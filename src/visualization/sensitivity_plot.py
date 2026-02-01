@@ -345,7 +345,7 @@ def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
     positive_sens = [p for p in params if s_norms[p] > 0]
     negative_sens = [p for p in params if s_norms[p] < 0]
     
-    insights_text = f"""
+    insights_text_parts = [f"""
     ╔══════════════════════════════════════════════════╗
     ║           🔬 敏 感 度 分 析 洞 察               ║
     ╠══════════════════════════════════════════════════╣
@@ -363,21 +363,24 @@ def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
     ║  ─────────── 参数分类 ───────────                ║
     ║                                                  ║
     ║  负敏感度（增加→减少TTL）:                       ║
-    """
+    """]
     
+    # 使用列表收集字符串，避免循环中字符串拼接
     for p in negative_sens:
-        insights_text += f"║    • {_get_label(p):<20} ({s_norms[p]:.4f})      ║\n"
+        insights_text_parts.append(f"║    • {_get_label(p):<20} ({s_norms[p]:.4f})      ║\n")
     
-    insights_text += """║                                                  ║
+    insights_text_parts.append("""║                                                  ║
 ║  正敏感度（增加→增加TTL）:                       ║
-"""
+""")
     
     for p in positive_sens:
-        insights_text += f"║    • {_get_label(p):<20} ({s_norms[p]:.4f})      ║\n"
+        insights_text_parts.append(f"║    • {_get_label(p):<20} ({s_norms[p]:.4f})      ║\n")
     
-    insights_text += """║                                                  ║
+    insights_text_parts.append("""║                                                  ║
 ╚══════════════════════════════════════════════════╝
-"""
+""")
+    
+    insights_text = ''.join(insights_text_parts)
     
     ax4.text(0.05, 0.5, insights_text, transform=ax4.transAxes, fontsize=9,
              verticalalignment='center', fontfamily='monospace',

@@ -229,11 +229,16 @@ def plot_state_timeline(result, ax=None, show=True, save_path=None):
     # 绘制状态色块
     prev_state = states[0]
     start_time = time_h[0]
+    labeled_states = set()  # 使用集合跟踪已标注的状态
     
     for i, (t, state) in enumerate(zip(time_h, states)):
         if state != prev_state or i == len(states) - 1:
             color = STATE_COLORS.get(prev_state, COLORS["neutral"])
-            ax.axvspan(start_time, t, alpha=0.7, color=color, label=prev_state if prev_state not in [s for s in states[:i-1]] else "")
+            # 使用集合进行 O(1) 查找
+            label = prev_state if prev_state not in labeled_states else ""
+            ax.axvspan(start_time, t, alpha=0.7, color=color, label=label)
+            if label:
+                labeled_states.add(prev_state)
             start_time = t
             prev_state = state
     
