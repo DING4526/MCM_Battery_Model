@@ -12,6 +12,8 @@ from visualization.timeseries import (
     plot_power_curve,
     plot_temperature_curve,
     plot_state_timeline,
+    plot_composite_power_temperature,
+    plot_soc_comparison,
 )
 from visualization.config import smart_savefig
 from usage.scenario import *
@@ -56,13 +58,15 @@ def run_basic_experiment(
         print("-" * 60)
         print("正在运行仿真...")
     
-    # 运行仿真
+    # 运行仿真（启用子模块功耗分解和无修正 SOC 记录）
     result = run_simulation(
         scenario=scenario,
         dt=dt,
         T_amb=T_amb,
         seed=seed,
         record=True,
+        record_breakdown=True,      # 记录子模块功耗分解
+        record_uncorrected=True,    # 记录无修正版本 SOC
     )
     
     ttl_hours = result["TTL"] / 3600
@@ -101,8 +105,24 @@ def run_basic_experiment(
     plot_state_timeline(result, show=False)
     smart_savefig("state_timeline.png", output_dir)
     
+    # ===== 新增复合图表 =====
+    
+    # 5. 复合图表1：温度 + 功耗堆叠图 + 状态时间线
+    plot_composite_power_temperature(result, T_amb=T_amb, show=False)
+    smart_savefig("composite_power_temperature.png", output_dir)
+    
+    # 6. 复合图表2：SOC 对比（带修正 vs 无修正）
+    plot_soc_comparison(result, show=False)
+    smart_savefig("soc_comparison.png", output_dir)
+    
     if verbose:
         print(f"图表已保存到 output/{output_dir}/ 目录")
+        print("  - soc_curve.png")
+        print("  - power_curve.png")
+        print("  - temperature_curve.png")
+        print("  - state_timeline.png")
+        print("  - composite_power_temperature.png  (新增复合图表)")
+        print("  - soc_comparison.png               (新增复合图表)")
     
     return result
 

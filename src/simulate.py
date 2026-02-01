@@ -6,12 +6,14 @@
 # 支持：
 #   - 随机种子控制（可复现）
 #   - 时间序列记录
+#   - 子模块功耗分解记录
+#   - 无修正版本 SOC 对比
 #   - Monte Carlo 仿真
 
 import random
 
 from battery_model import BatteryModel
-from power_model import total_power
+from power_model import total_power, power_breakdown
 from usage.state import get_state_params
 from usage.control import ScenarioController
 
@@ -26,9 +28,20 @@ def run_simulation(
     T_amb=298.15,
     seed=None,
     record=True,
+    record_breakdown=False,
+    record_uncorrected=False,
 ):
     """
     单次运行仿真直到电池耗尽
+
+    参数：
+        scenario : dict - 使用场景配置
+        dt : float - 时间步长（秒）
+        T_amb : float - 环境温度（K）
+        seed : int - 随机种子
+        record : bool - 是否记录时间序列
+        record_breakdown : bool - 是否记录子模块功耗分解
+        record_uncorrected : bool - 是否记录无修正版本的 SOC
 
     Returns
     -------
@@ -39,7 +52,15 @@ def run_simulation(
           "SOC": [...],
           "Tb": [...],
           "Power": [...],
-          "State": [...]
+          "State": [...],
+          # 如果 record_breakdown=True:
+          "Power_screen": [...],
+          "Power_cpu": [...],
+          "Power_radio": [...],
+          "Power_gps": [...],
+          "Power_background": [...],
+          # 如果 record_uncorrected=True:
+          "SOC_uncorrected": [...]  # 无电压/温度/老化修正的 SOC
         }
     """
 
@@ -47,12 +68,24 @@ def run_simulation(
     if seed is not None:
         random.seed(seed)
 
-    # ---------- 初始化电池 ----------
+    # ---------- 初始化电池（带修正） ----------
     battery = BatteryModel(
         SOC0=1.0,
         Tb0=298.15,
         aging_loss=0.15,
     )
+
+    # ---------- 初始化无修正电池（用于对比） ----------
+    if record_uncorrected:
+        # 无修正电池：无老化损失，固定电压
+        battery_uncorrected = BatteryModel(
+            SOC0=1.0,
+            Tb0=298.15,
+            aging_loss=0.0,  # 无老化修正
+            alpha=0.0,       # 无温度修正
+        )
+        # 固定电压用于简化计算（覆盖 voc 方法）
+        battery_uncorrected._fixed_voltage = 3.7  # 固定标称电压
 
     # ---------- 使用行为控制器 ----------
     controller = ScenarioController(scenario)
@@ -63,6 +96,16 @@ def run_simulation(
     tb_list = []
     power_list = []
     state_list = []
+    
+    # 子模块功耗分解记录
+    power_screen_list = []
+    power_cpu_list = []
+    power_radio_list = []
+    power_gps_list = []
+    power_bg_list = []
+    
+    # 无修正 SOC 记录
+    soc_uncorrected_list = []
 
     t = 0.0
 
@@ -74,6 +117,14 @@ def run_simulation(
         P = total_power(state_params)
 
         battery.step(P, T_amb, dt)
+        
+        # 更新无修正电池
+        if record_uncorrected:
+            # 使用简化的 SOC 计算：dSOC/dt = -P / (V_nom * Q_nom)
+            V_nom = 3.7  # 固定标称电压
+            Q_nom = battery_uncorrected.Q_nom
+            dSOC = -P / (V_nom * Q_nom) * dt
+            battery_uncorrected.SOC = max(0.0, battery_uncorrected.SOC + dSOC)
 
         if record:
             time_list.append(t)
@@ -81,6 +132,19 @@ def run_simulation(
             tb_list.append(battery.Tb)
             power_list.append(P)
             state_list.append(current_state)
+            
+            # 记录子模块功耗
+            if record_breakdown:
+                breakdown = power_breakdown(state_params)
+                power_screen_list.append(breakdown["screen"])
+                power_cpu_list.append(breakdown["cpu"])
+                power_radio_list.append(breakdown["radio"])
+                power_gps_list.append(breakdown["gps"])
+                power_bg_list.append(breakdown["background"])
+            
+            # 记录无修正 SOC
+            if record_uncorrected:
+                soc_uncorrected_list.append(battery_uncorrected.SOC)
 
         t += dt
 
@@ -96,6 +160,20 @@ def run_simulation(
             "Power": power_list,
             "State": state_list,
         })
+        
+        if record_breakdown:
+            result.update({
+                "Power_screen": power_screen_list,
+                "Power_cpu": power_cpu_list,
+                "Power_radio": power_radio_list,
+                "Power_gps": power_gps_list,
+                "Power_background": power_bg_list,
+            })
+        
+        if record_uncorrected:
+            result.update({
+                "SOC_uncorrected": soc_uncorrected_list,
+            })
 
     return result
 
