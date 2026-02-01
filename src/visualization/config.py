@@ -187,6 +187,16 @@ def setup_style():
     # 刻度字体
     plt.rcParams['xtick.labelsize'] = 9
     plt.rcParams['ytick.labelsize'] = 9
+    
+    # 设置等宽字体（用于统计面板）
+    plt.rcParams['font.monospace'] = [chinese_font, 'DejaVu Sans Mono', 'Courier New']
+
+
+# 获取等宽字体名称（用于统计面板）
+def get_monospace_font():
+    """获取支持中文的等宽字体"""
+    chinese_font = setup_chinese_font()
+    return chinese_font  # 中文字体通常也支持等宽显示
 
 
 # =====================================================

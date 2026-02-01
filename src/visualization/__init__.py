@@ -16,6 +16,7 @@ from .config import (
     get_save_path,
     save_figure,
     ensure_output_dir,
+    get_monospace_font,
     COLORS,
     STATE_COLORS,
     SCENARIO_COLORS,
