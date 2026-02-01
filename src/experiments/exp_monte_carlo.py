@@ -8,7 +8,12 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from simulate import run_monte_carlo
-from visualization import plot_ttl_distribution, plot_ttl_statistical_summary
+from visualization.distribution import (
+    plot_ttl_distribution,
+    plot_ttl_boxplot,
+    plot_ttl_violin,
+    plot_ttl_kde,
+)
 from visualization.config import smart_savefig
 from usage.scenario import *
 
@@ -83,9 +88,28 @@ def run_monte_carlo_experiment(
         print(f"   范围: [{results['min']/3600:.2f}, {results['max']/3600:.2f}] 小时")
         print("=" * 60)
     
-    # 保存图片
-    plot_ttl_distribution(ttl_list, filename="ttl_distribution.png", subdir=output_dir, show=False)
-    plot_ttl_statistical_summary(ttl_list, filename="ttl_summary.png", subdir=output_dir, show=False)
+    # 独立保存每个图表
+    if verbose:
+        print("保存图表...")
+    
+    # 1. TTL 分布直方图
+    plot_ttl_distribution(ttl_list, show=False)
+    smart_savefig("ttl_histogram.png", output_dir)
+    
+    # 2. 箱线图
+    plot_ttl_boxplot(ttl_list, show=False)
+    smart_savefig("ttl_boxplot.png", output_dir)
+    
+    # 3. 小提琴图
+    plot_ttl_violin(ttl_list, show=False)
+    smart_savefig("ttl_violin.png", output_dir)
+    
+    # 4. 核密度估计
+    plot_ttl_kde(ttl_list, show=False)
+    smart_savefig("ttl_kde.png", output_dir)
+    
+    if verbose:
+        print(f"图表已保存到 output/{output_dir}/ 目录")
     
     return results
 

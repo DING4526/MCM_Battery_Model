@@ -8,8 +8,11 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from simulate import run_simulation, run_monte_carlo
-from visualization import plot_scenario_comparison
-from visualization.comparison import plot_scenario_comprehensive_comparison
+from visualization.comparison import (
+    plot_scenario_comparison,
+    plot_scenario_boxplot,
+    plot_scenario_radar,
+)
 from visualization.config import smart_savefig
 from usage.scenario import *
 
@@ -103,6 +106,8 @@ def run_comparison_experiment(
             "min": np.min(ttl_list),
             "max": np.max(ttl_list),
             "median": np.median(ttl_list),
+            "q1": np.percentile(ttl_list, 25),
+            "q3": np.percentile(ttl_list, 75),
         }
         
         if verbose:
@@ -116,9 +121,24 @@ def run_comparison_experiment(
             print(f"  {i}. {name}: {results[name]['mean']/3600:.2f} h")
         print("=" * 60)
     
-    # 保存图片
-    plot_scenario_comparison(results, filename="scenario_comparison.png", subdir=output_dir, show=False)
-    plot_scenario_comprehensive_comparison(results, filename="scenario_comprehensive.png", subdir=output_dir, show=False)
+    # 独立保存每个图表
+    if verbose:
+        print("保存图表...")
+    
+    # 1. 场景对比柱状图
+    plot_scenario_comparison(results, show=False)
+    smart_savefig("scenario_comparison.png", output_dir)
+    
+    # 2. 场景箱线图
+    plot_scenario_boxplot(results, show=False)
+    smart_savefig("scenario_boxplot.png", output_dir)
+    
+    # 3. 雷达图
+    plot_scenario_radar(results, show=False)
+    smart_savefig("scenario_radar.png", output_dir)
+    
+    if verbose:
+        print(f"图表已保存到 output/{output_dir}/ 目录")
     
     return results
 

@@ -7,7 +7,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from simulate import run_simulation
-from visualization import plot_single_run
+from visualization.timeseries import (
+    plot_soc_curve,
+    plot_power_curve,
+    plot_temperature_curve,
+    plot_state_timeline,
+)
 from visualization.config import smart_savefig
 from usage.scenario import *
 
@@ -76,8 +81,28 @@ def run_basic_experiment(
         
         print("=" * 60)
     
-    # 保存图片
-    plot_single_run(result, filename="soc_power.png", subdir=output_dir, show=False)
+    # 独立保存每个图表
+    if verbose:
+        print("保存图表...")
+    
+    # 1. SOC 曲线
+    plot_soc_curve(result, show=False)
+    smart_savefig("soc_curve.png", output_dir)
+    
+    # 2. 功耗曲线
+    plot_power_curve(result, show=False)
+    smart_savefig("power_curve.png", output_dir)
+    
+    # 3. 温度曲线
+    plot_temperature_curve(result, T_amb=T_amb, show=False)
+    smart_savefig("temperature_curve.png", output_dir)
+    
+    # 4. 状态时间线
+    plot_state_timeline(result, show=False)
+    smart_savefig("state_timeline.png", output_dir)
+    
+    if verbose:
+        print(f"图表已保存到 output/{output_dir}/ 目录")
     
     return result
 

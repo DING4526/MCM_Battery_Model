@@ -9,8 +9,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from simulate import run_monte_carlo
 from usage.state import USAGE_STATES
-from visualization import plot_sensitivity_bar
-from visualization.sensitivity_plot import plot_sensitivity_comprehensive
+from visualization.sensitivity_plot import (
+    plot_sensitivity_bar,
+    plot_sensitivity_tornado,
+    plot_sensitivity_spider,
+    plot_sensitivity_heatmap,
+)
 from visualization.config import smart_savefig
 from usage.scenario import *
 
@@ -131,9 +135,24 @@ def run_sensitivity_experiment(
             print(f"  {i}. {PARAM_DESCRIPTIONS.get(p, p)}: {sign}{abs(results[p]['S_norm']):.4f}")
         print("=" * 60)
     
-    # 保存图片
-    plot_sensitivity_bar(results, filename="sensitivity_bar.png", subdir=output_dir, show=False)
-    plot_sensitivity_comprehensive(results, ttl_base, filename="sensitivity_comprehensive.png", subdir=output_dir, show=False)
+    # 独立保存每个图表
+    if verbose:
+        print("保存图表...")
+    
+    # 1. 敏感度柱状图
+    plot_sensitivity_bar(results, show=False)
+    smart_savefig("sensitivity_bar.png", output_dir)
+    
+    # 2. 龙卷风图
+    plot_sensitivity_tornado(results, ttl_base, show=False)
+    smart_savefig("sensitivity_tornado.png", output_dir)
+    
+    # 3. 蜘蛛图
+    plot_sensitivity_spider(results, show=False)
+    smart_savefig("sensitivity_spider.png", output_dir)
+    
+    if verbose:
+        print(f"图表已保存到 output/{output_dir}/ 目录")
     
     results["_baseline_ttl"] = ttl_base
     return results
