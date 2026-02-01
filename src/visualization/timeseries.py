@@ -237,13 +237,15 @@ def plot_state_timeline(result, ax=None, show=True, save_path=None):
     return ax
 
 
-def plot_single_run(result, save_path=None, show=None):
+def plot_single_run(result, filename=None, subdir="", save_path=None, show=None):
     """
     绘制单次仿真的基础图表（SOC + 功耗）
     
     参数：
         result : dict - 仿真结果
-        save_path : str - 保存路径或文件名
+        filename : str - 保存文件名
+        subdir : str - 输出子目录
+        save_path : str - 完整保存路径（兼容旧接口）
         show : bool - 是否显示图形，None 则使用全局设置
     """
     _setup_style()
@@ -263,7 +265,10 @@ def plot_single_run(result, save_path=None, show=None):
     
     plt.tight_layout()
     
-    if save_path:
+    # 保存图片
+    if filename:
+        smart_savefig(filename, subdir)
+    elif save_path:
         smart_savefig(save_path)
     
     # 使用参数或全局设置决定是否显示

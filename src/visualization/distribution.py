@@ -28,15 +28,17 @@ from .config import (
 # 基础分布可视化
 # =====================================================
 
-def plot_ttl_distribution(ttl_list, ax=None, show=True, save_path=None, bins=20):
+def plot_ttl_distribution(ttl_list, filename=None, subdir="", ax=None, show=None, save_path=None, bins=20):
     """
     绘制 TTL 分布直方图
     
     参数：
         ttl_list : list - TTL 列表（秒）
+        filename : str - 保存文件名
+        subdir : str - 输出子目录
         ax : matplotlib.axes.Axes - 可选的绑定轴
         show : bool - 是否显示图形
-        save_path : str - 保存路径
+        save_path : str - 兼容旧接口
         bins : int - 直方图区间数
     """
     _setup_style()
@@ -59,18 +61,11 @@ def plot_ttl_distribution(ttl_list, ax=None, show=True, save_path=None, bins=20)
     # 添加统计线
     mean_ttl = np.mean(ttl_h)
     median_ttl = np.median(ttl_h)
-    std_ttl = np.std(ttl_h)
     
     ax.axvline(x=mean_ttl, color=COLORS["accent"], linestyle='--', linewidth=2, 
                label=f"均值: {mean_ttl:.2f} h")
     ax.axvline(x=median_ttl, color=COLORS["success"], linestyle=':', linewidth=2, 
                label=f"中位数: {median_ttl:.2f} h")
-    
-    # 标注置信区间
-    ci_low = mean_ttl - 1.96 * std_ttl / np.sqrt(len(ttl_h))
-    ci_high = mean_ttl + 1.96 * std_ttl / np.sqrt(len(ttl_h))
-    ax.axvspan(ci_low, ci_high, alpha=0.2, color=COLORS["accent"], 
-               label=f"95% CI: [{ci_low:.2f}, {ci_high:.2f}]")
     
     ax.set_xlabel("续航时间 TTL (小时)", fontsize=11)
     ax.set_ylabel("频数", fontsize=11)
@@ -78,10 +73,16 @@ def plot_ttl_distribution(ttl_list, ax=None, show=True, save_path=None, bins=20)
     ax.legend(loc='upper right', fontsize=9)
     ax.grid(True, alpha=0.3)
     
-    if save_path:
+    plt.tight_layout()
+    
+    if filename:
+        smart_savefig(filename, subdir)
+    elif save_path:
         smart_savefig(save_path)
+    
+    if show is None:
+        show = get_show_plots()
     if show:
-        plt.tight_layout()
         plt.show()
     
     return ax
@@ -243,19 +244,15 @@ def plot_ttl_kde(ttl_list, ax=None, show=True, save_path=None, fill=True):
     return ax
 
 
-def plot_ttl_statistical_summary(ttl_list, save_path=None, show=None):
+def plot_ttl_statistical_summary(ttl_list, filename=None, subdir="", save_path=None, show=None):
     """
-    绘制 TTL 综合统计摘要图（比赛级别可视化）
-    
-    包含：
-    - 直方图 + KDE
-    - 箱线图
-    - 统计信息面板
-    - QQ 图（正态性检验）
+    绘制 TTL 综合统计摘要图
     
     参数：
         ttl_list : list - TTL 列表（秒）
-        save_path : str - 保存路径
+        filename : str - 保存文件名
+        subdir : str - 输出子目录
+        save_path : str - 兼容旧接口
         show : bool - 是否显示图形，None 则使用全局设置
     """
     _setup_style()
@@ -368,7 +365,9 @@ def plot_ttl_statistical_summary(ttl_list, save_path=None, show=None):
     
     plt.tight_layout()
     
-    if save_path:
+    if filename:
+        smart_savefig(filename, subdir)
+    elif save_path:
         smart_savefig(save_path)
     
     # 使用参数或全局设置决定是否显示

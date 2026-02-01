@@ -15,23 +15,26 @@ from pathlib import Path
 # 默认输出目录配置
 # =====================================================
 
-# 默认输出目录（相对于项目根目录）
-DEFAULT_OUTPUT_DIR = "output/figures"
+# 项目根目录（与 src 平行的 output 目录）
+_project_root = None
 
-# 全局输出目录（可通过 set_output_dir 修改）
-_output_dir = None
+# 全局显示控制（默认不弹窗）
+_show_plots = False
 
-# 全局显示控制（可通过 set_show_plots 修改）
-_show_plots = True
+
+def _get_project_root():
+    """获取项目根目录"""
+    global _project_root
+    if _project_root is None:
+        current_dir = Path(__file__).resolve().parent
+        while current_dir.name != 'src' and current_dir.parent != current_dir:
+            current_dir = current_dir.parent
+        _project_root = current_dir.parent
+    return _project_root
 
 
 def set_show_plots(show: bool):
-    """
-    设置是否调用 plt.show()
-    
-    参数：
-        show : bool - True 则显示图形窗口，False 则不显示
-    """
+    """设置是否调用 plt.show()"""
     global _show_plots
     _show_plots = show
 
@@ -41,79 +44,59 @@ def get_show_plots() -> bool:
     return _show_plots
 
 
-def get_output_dir():
+def get_output_dir(subdir=""):
     """
-    获取当前输出目录
+    获取输出目录
+    
+    参数：
+        subdir : str - 子目录名（如 "basic", "monte_carlo" 等）
     
     返回：
         str - 输出目录路径
     """
-    global _output_dir
-    if _output_dir is None:
-        # 尝试找到项目根目录
-        current_dir = Path(__file__).resolve().parent
-        # 向上查找直到找到 src 目录的父目录
-        while current_dir.name != 'src' and current_dir.parent != current_dir:
-            current_dir = current_dir.parent
-        project_root = current_dir.parent
-        _output_dir = str(project_root / DEFAULT_OUTPUT_DIR)
-    
-    return _output_dir
+    project_root = _get_project_root()
+    if subdir:
+        output_dir = project_root / "output" / subdir
+    else:
+        output_dir = project_root / "output"
+    os.makedirs(output_dir, exist_ok=True)
+    return str(output_dir)
 
 
 def set_output_dir(path):
-    """
-    设置输出目录
-    
-    参数：
-        path : str - 输出目录路径
-    """
-    global _output_dir
-    _output_dir = path
-    # 确保目录存在
-    ensure_output_dir()
+    """设置输出目录（兼容旧接口）"""
+    # 此函数保留用于兼容，但实际上使用 get_output_dir(subdir) 更好
+    pass
 
 
 def ensure_output_dir():
-    """确保输出目录存在"""
-    output_dir = get_output_dir()
-    os.makedirs(output_dir, exist_ok=True)
-    return output_dir
+    """确保输出目录存在（兼容旧接口）"""
+    return get_output_dir()
 
 
-def get_save_path(filename):
+def get_save_path(filename, subdir=""):
     """
     获取完整的保存路径
     
     参数：
-        filename : str - 文件名或完整路径
+        filename : str - 文件名
+        subdir : str - 子目录名
     
     返回：
         str - 完整路径
-    
-    说明：
-        - 如果 filename 是绝对路径，直接返回
-        - 如果 filename 只是文件名，则添加默认输出目录
-        - 自动确保输出目录存在
     """
     if filename is None:
         return None
     
-    # 如果是绝对路径，直接返回（但确保目录存在）
+    # 如果是绝对路径，直接返回
     if os.path.isabs(filename):
         dir_path = os.path.dirname(filename)
         if dir_path:
             os.makedirs(dir_path, exist_ok=True)
         return filename
     
-    # 如果包含目录分隔符但不是绝对路径，视为相对于当前工作目录
-    if os.path.dirname(filename):
-        dir_path = os.path.dirname(filename)
-        os.makedirs(dir_path, exist_ok=True)
-        return filename
-    
-    # 否则添加默认输出目录
-    output_dir = ensure_output_dir()
+    # 获取输出目录并拼接文件名
+    output_dir = get_output_dir(subdir)
     return os.path.join(output_dir, filename)
 
 
@@ -298,20 +281,21 @@ PARAM_LABELS = {
 # 工具函数
 # =====================================================
 
-def save_figure(fig, filename, dpi=300, close_after=False):
+def save_figure(fig, filename, subdir="", dpi=300, close_after=False):
     """
     保存图表到输出目录
     
     参数：
         fig : matplotlib.figure.Figure - 图表对象
         filename : str - 文件名
+        subdir : str - 子目录名
         dpi : int - 分辨率
         close_after : bool - 保存后是否关闭图表
     
     返回：
         str - 保存的完整路径
     """
-    save_path = get_save_path(filename)
+    save_path = get_save_path(filename, subdir)
     fig.savefig(save_path, dpi=dpi, bbox_inches='tight', facecolor='white')
     print(f"[Save] 图表已保存: {save_path}")
     
@@ -321,21 +305,22 @@ def save_figure(fig, filename, dpi=300, close_after=False):
     return save_path
 
 
-def smart_savefig(save_path, dpi=300):
+def smart_savefig(filename, subdir="", dpi=300):
     """
     智能保存当前图表
     
     参数：
-        save_path : str - 保存路径或文件名（如果只是文件名，自动添加输出目录）
+        filename : str - 文件名
+        subdir : str - 子目录名（如 "basic", "monte_carlo"）
         dpi : int - 分辨率
     
     返回：
         str - 保存的完整路径
     """
-    if save_path is None:
+    if filename is None:
         return None
     
-    full_path = get_save_path(save_path)
+    full_path = get_save_path(filename, subdir)
     plt.savefig(full_path, dpi=dpi, bbox_inches='tight', facecolor='white')
     print(f"[Save] 图表已保存: {full_path}")
     return full_path
