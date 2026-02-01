@@ -1,14 +1,14 @@
 # simulate.py
 #
+# 核心仿真模块（无可视化）
+#
 # usage → power → battery
 # 支持：
 #   - 随机种子控制（可复现）
 #   - 时间序列记录
 #   - Monte Carlo 仿真
-#   - 基础可视化
 
 import random
-import matplotlib.pyplot as plt
 
 from battery_model import BatteryModel
 from power_model import total_power
@@ -130,50 +130,7 @@ def run_monte_carlo(
 
 
 # =====================================================
-# 可视化工具
-# =====================================================
-def plot_single_run(result):
-    """
-    单次仿真时间序列
-    """
-
-    time_h = [t / 3600 for t in result["time"]]
-
-    plt.figure()
-    plt.plot(time_h, result["SOC"])
-    plt.xlabel("Time (hours)")
-    plt.ylabel("SOC")
-    plt.title("SOC vs Time")
-    plt.grid(True)
-    plt.show()
-
-    plt.figure()
-    plt.plot(time_h, result["Power"])
-    plt.xlabel("Time (hours)")
-    plt.ylabel("Power (W)")
-    plt.title("Power vs Time")
-    plt.grid(True)
-    plt.show()
-
-
-def plot_ttl_distribution(ttl_list):
-    """
-    TTL 分布直方图
-    """
-
-    ttl_h = [t / 3600 for t in ttl_list]
-
-    plt.figure()
-    plt.hist(ttl_h, bins=20, edgecolor="black")
-    plt.xlabel("Time-to-Empty (hours)")
-    plt.ylabel("Count")
-    plt.title("TTL Distribution (Monte Carlo)")
-    plt.grid(True)
-    plt.show()
-
-
-# =====================================================
-# 示例
+# 示例（仅测试核心仿真功能）
 # =====================================================
 if __name__ == "__main__":
 
@@ -185,13 +142,12 @@ if __name__ == "__main__":
     )
     print(f"TTL = {result['TTL'] / 3600:.2f} hours")
 
-    plot_single_run(result)
-
     # ---------- Monte Carlo ----------
     ttl_mc = run_monte_carlo(
         PURE_GAMING,
-        n_samples=200,
+        n_samples=100,
         base_seed=1000,
     )
-
-    plot_ttl_distribution(ttl_mc)
+    
+    import numpy as np
+    print(f"Monte Carlo TTL: mean={np.mean(ttl_mc)/3600:.2f}h, std={np.std(ttl_mc)/3600:.3f}h")

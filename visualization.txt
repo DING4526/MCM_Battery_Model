@@ -1,0 +1,1976 @@
+**[visualization]**
+
+==== src/visualization\comparison.py ====
+
+# visualization/comparison.py
+# 场景对比可视化模块
+#
+# 提供多种场景对比可视化方式：
+# - 场景对比柱状图
+# - 多场景箱线图
+# - 雷达图
+# - 多场景时间线对比
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Patch
+
+# 从统一配置模块导入
+from .config import (
+    setup_style as _setup_style,
+    COLORS,
+    SCENARIO_COLORS,
+    DEFAULT_COLORS,
+    to_hours as _to_hours,
+    save_figure,
+    get_save_path,
+    smart_savefig,
+)
+
+
+def _get_color(scenario_name, index):
+    """获取场景颜色"""
+    if scenario_name in SCENARIO_COLORS:
+        return SCENARIO_COLORS[scenario_name]
+    return DEFAULT_COLORS[index % len(DEFAULT_COLORS)]
+
+
+# =====================================================
+# 场景对比可视化函数
+# =====================================================
+
+def plot_scenario_comparison(comparison_results, ax=None, show=True, save_path=None, 
+                              metric="mean", error_bars=True):
+    """
+    绘制场景对比柱状图
+    
+    参数：
+        comparison_results : dict - 对比结果
+            {scenario_name: {"ttl_list": [...], "mean": float, "std": float, ...}}
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+        metric : str - 使用的指标 ("mean", "median")
+        error_bars : bool - 是否显示误差棒
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 7))
+    
+    scenarios = list(comparison_results.keys())
+    
+    # 获取指标值
+    if metric == "mean":
+        values = [comparison_results[s]["mean"] / 3600 for s in scenarios]
+        errors = [comparison_results[s]["std"] / 3600 for s in scenarios] if error_bars else None
+        ylabel = "平均续航时间 (小时)"
+    else:
+        values = [comparison_results[s]["median"] / 3600 for s in scenarios]
+        q1 = [comparison_results[s]["q1"] / 3600 for s in scenarios]
+        q3 = [comparison_results[s]["q3"] / 3600 for s in scenarios]
+        errors = [[v - q1[i] for i, v in enumerate(values)],
+                  [q3[i] - v for i, v in enumerate(values)]] if error_bars else None
+        ylabel = "中位数续航时间 (小时)"
+    
+    # 颜色
+    colors = [_get_color(s, i) for i, s in enumerate(scenarios)]
+    
+    # 绘制柱状图
+    x = range(len(scenarios))
+    bars = ax.bar(x, values, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+    
+    # 误差棒
+    if error_bars and errors:
+        ax.errorbar(x, values, yerr=errors, fmt='none', color='black', capsize=5, linewidth=1.5)
+    
+    # 添加数值标签
+    for bar, val in zip(bars, values):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                f'{val:.2f}h', ha='center', va='bottom', fontsize=10, fontweight='bold')
+    
+    ax.set_xticks(x)
+    ax.set_xticklabels(scenarios, rotation=15, ha='right', fontsize=10)
+    ax.set_ylabel(ylabel, fontsize=11)
+    ax.set_title("不同使用场景续航时间对比", fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    # 添加参考线（最佳和最差）
+    max_val = max(values)
+    min_val = min(values)
+    ax.axhline(y=max_val, color='green', linestyle='--', alpha=0.5, linewidth=1)
+    ax.axhline(y=min_val, color='red', linestyle='--', alpha=0.5, linewidth=1)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_scenario_boxplot(comparison_results, ax=None, show=True, save_path=None):
+    """
+    绘制多场景箱线图对比
+    
+    参数：
+        comparison_results : dict - 对比结果
+            {scenario_name: {"ttl_list": [...], ...}}
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 7))
+    
+    scenarios = list(comparison_results.keys())
+    data = [_to_hours(comparison_results[s]["ttl_list"]) for s in scenarios]
+    colors = [_get_color(s, i) for i, s in enumerate(scenarios)]
+    
+    # 箱线图
+    bp = ax.boxplot(data, patch_artist=True, labels=scenarios)
+    
+    # 设置颜色
+    for patch, color in zip(bp['boxes'], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.7)
+    
+    for median in bp['medians']:
+        median.set_color('black')
+        median.set_linewidth(2)
+    
+    # 添加散点（小样本时）
+    for i, (d, color) in enumerate(zip(data, colors)):
+        if len(d) <= 100:
+            jitter = np.random.normal(0, 0.04, size=len(d))
+            ax.scatter(i + 1 + jitter, d, alpha=0.3, color=color, s=15)
+    
+    # 添加均值标记
+    means = [np.mean(d) for d in data]
+    ax.scatter(range(1, len(scenarios) + 1), means, color='red', marker='D', s=80, 
+               zorder=5, label='均值')
+    
+    ax.set_xticklabels(scenarios, rotation=15, ha='right', fontsize=10)
+    ax.set_ylabel("续航时间 TTL (小时)", fontsize=11)
+    ax.set_title("不同使用场景 TTL 分布对比", fontsize=13, fontweight='bold')
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, save_path=None):
+    """
+    绘制场景对比雷达图
+    
+    参数：
+        comparison_results : dict - 对比结果
+        metrics : list - 用于雷达图的指标列表
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    scenarios = list(comparison_results.keys())
+    
+    # 默认指标
+    if metrics is None:
+        metrics = ["mean", "std", "min", "max", "median"]
+    
+    metric_labels = {
+        "mean": "平均值",
+        "std": "标准差",
+        "min": "最小值",
+        "max": "最大值",
+        "median": "中位数"
+    }
+    
+    # 准备数据
+    data = {}
+    for s in scenarios:
+        ttl_h = _to_hours(comparison_results[s]["ttl_list"])
+        data[s] = {
+            "mean": np.mean(ttl_h),
+            "std": np.std(ttl_h),
+            "min": np.min(ttl_h),
+            "max": np.max(ttl_h),
+            "median": np.median(ttl_h)
+        }
+    
+    # 归一化数据（每个指标 0-1）
+    normalized = {}
+    for m in metrics:
+        vals = [data[s][m] for s in scenarios]
+        min_v, max_v = min(vals), max(vals)
+        range_v = max_v - min_v if max_v != min_v else 1
+        for s in scenarios:
+            if s not in normalized:
+                normalized[s] = []
+            normalized[s].append((data[s][m] - min_v) / range_v)
+    
+    # 角度
+    angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
+    angles += angles[:1]
+    
+    # 标签
+    labels = [metric_labels.get(m, m) for m in metrics]
+    
+    # 创建极坐标图
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+    
+    # 绘制每个场景
+    for i, s in enumerate(scenarios):
+        values = normalized[s] + [normalized[s][0]]
+        color = _get_color(s, i)
+        ax.fill(angles, values, color=color, alpha=0.1)
+        ax.plot(angles, values, color=color, linewidth=2, marker='o', markersize=6, label=s)
+    
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(labels, fontsize=10)
+    ax.set_title("场景多维度对比雷达图\n（归一化指标）", fontsize=13, fontweight='bold', y=1.1)
+    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=9)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_multi_scenario_timeline(results_dict, ax=None, show=True, save_path=None):
+    """
+    绘制多场景时间线对比
+    
+    参数：
+        results_dict : dict - 多场景仿真结果
+            {scenario_name: result_dict}
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(14, 7))
+    
+    scenarios = list(results_dict.keys())
+    
+    for i, (scenario, result) in enumerate(results_dict.items()):
+        time_h = _to_hours(result["time"])
+        soc_percent = [s * 100 for s in result["SOC"]]
+        color = _get_color(scenario, i)
+        
+        ax.plot(time_h, soc_percent, color=color, linewidth=2, label=scenario)
+    
+    # 关键电量线
+    ax.axhline(y=20, color='orange', linestyle='--', alpha=0.5, label="低电量警告 (20%)")
+    ax.axhline(y=5, color='red', linestyle='--', alpha=0.5, label="极低电量 (5%)")
+    
+    ax.set_xlabel("时间 (小时)", fontsize=11)
+    ax.set_ylabel("电量 SOC (%)", fontsize=11)
+    ax.set_title("多场景 SOC 变化曲线对比", fontsize=13, fontweight='bold')
+    ax.set_ylim(0, 105)
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None, save_path=None):
+    """
+    绘制场景对比综合图表（比赛级别可视化）
+    
+    包含：
+    - 柱状图对比
+    - 箱线图分布
+    - 时间线对比（如有）
+    - 统计表格
+    
+    参数：
+        comparison_results : dict - Monte Carlo 对比结果
+        results_dict : dict - 单次仿真结果（可选）
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    has_timeline = results_dict is not None
+    
+    if has_timeline:
+        fig = plt.figure(figsize=(18, 14))
+        ax1 = fig.add_subplot(2, 2, 1)
+        ax2 = fig.add_subplot(2, 2, 2)
+        ax3 = fig.add_subplot(2, 2, 3)
+        ax4 = fig.add_subplot(2, 2, 4)
+    else:
+        fig = plt.figure(figsize=(16, 10))
+        ax1 = fig.add_subplot(2, 2, 1)
+        ax2 = fig.add_subplot(2, 2, 2)
+        ax3 = fig.add_subplot(2, 2, (3, 4))
+        ax4 = None
+    
+    # ===== 柱状图对比 =====
+    plot_scenario_comparison(comparison_results, ax=ax1, show=False)
+    
+    # ===== 箱线图分布 =====
+    plot_scenario_boxplot(comparison_results, ax=ax2, show=False)
+    
+    if has_timeline:
+        # ===== 时间线对比 =====
+        plot_multi_scenario_timeline(results_dict, ax=ax3, show=False)
+        
+        # ===== 统计表格 =====
+        ax4.axis('off')
+    else:
+        ax3.axis('off')
+    
+    # 构建统计表格（使用纯ASCII边框，兼容性更好）
+    scenarios = list(comparison_results.keys())
+    
+    table_text = """
+    +===============================================================================+
+    |                    [Compare] 场 景 对 比 统 计 表                            |
+    +==================+===========+==========+==========+==========+==============+
+    |      场景        |  均值(h)  | 标准差(h)|  最小(h) |  最大(h) | 相对基准(%)  |
+    +==================+===========+==========+==========+==========+==============+
+"""
+    
+    # 基准（第一个场景）
+    baseline_mean = comparison_results[scenarios[0]]["mean"]
+    
+    for s in scenarios:
+        mean_h = comparison_results[s]["mean"] / 3600
+        std_h = comparison_results[s]["std"] / 3600
+        min_h = comparison_results[s]["min"] / 3600
+        max_h = comparison_results[s]["max"] / 3600
+        relative = (comparison_results[s]["mean"] / baseline_mean - 1) * 100
+        
+        # 根据相对变化添加符号
+        rel_str = f"+{relative:.1f}%" if relative > 0 else f"{relative:.1f}%"
+        
+        table_text += f"    | {s:<16} | {mean_h:>9.2f} | {std_h:>8.2f} | {min_h:>8.2f} | {max_h:>8.2f} | {rel_str:>12} |\n"
+    
+    table_text += """    +==================+===========+==========+==========+==========+==============+
+"""
+    
+    # 添加洞察
+    best_scenario = max(scenarios, key=lambda s: comparison_results[s]["mean"])
+    worst_scenario = min(scenarios, key=lambda s: comparison_results[s]["mean"])
+    
+    insights = f"""
+    
+    [Key] 关键洞察:
+    
+    * 最佳续航场景: {best_scenario} ({comparison_results[best_scenario]["mean"]/3600:.2f} 小时)
+    * 最差续航场景: {worst_scenario} ({comparison_results[worst_scenario]["mean"]/3600:.2f} 小时)
+    * 最大续航差异: {(comparison_results[best_scenario]["mean"] - comparison_results[worst_scenario]["mean"])/3600:.2f} 小时
+    """
+    
+    table_text += insights
+    
+    target_ax = ax4 if has_timeline else ax3
+    target_ax.text(0.05, 0.5, table_text, transform=target_ax.transAxes, fontsize=9,
+                   verticalalignment='center',
+                   bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+    
+    # 总标题
+    fig.suptitle("[Scenario] 使用场景对比分析报告", fontsize=16, fontweight='bold', y=1.02)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        smart_savefig(save_path)
+    
+    plt.show()
+    return fig
+
+
+==== src/visualization\config.py ====
+
+# visualization/config.py
+# 可视化配置模块
+#
+# 提供统一的配置：
+# - 中文字体支持
+# - 默认输出目录
+# - 全局样式设置
+
+import os
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+from pathlib import Path
+
+# =====================================================
+# 默认输出目录配置
+# =====================================================
+
+# 默认输出目录（相对于项目根目录）
+DEFAULT_OUTPUT_DIR = "output/figures"
+
+# 全局输出目录（可通过 set_output_dir 修改）
+_output_dir = None
+
+
+def get_output_dir():
+    """
+    获取当前输出目录
+    
+    返回：
+        str - 输出目录路径
+    """
+    global _output_dir
+    if _output_dir is None:
+        # 尝试找到项目根目录
+        current_dir = Path(__file__).resolve().parent
+        # 向上查找直到找到 src 目录的父目录
+        while current_dir.name != 'src' and current_dir.parent != current_dir:
+            current_dir = current_dir.parent
+        project_root = current_dir.parent
+        _output_dir = str(project_root / DEFAULT_OUTPUT_DIR)
+    
+    return _output_dir
+
+
+def set_output_dir(path):
+    """
+    设置输出目录
+    
+    参数：
+        path : str - 输出目录路径
+    """
+    global _output_dir
+    _output_dir = path
+    # 确保目录存在
+    ensure_output_dir()
+
+
+def ensure_output_dir():
+    """确保输出目录存在"""
+    output_dir = get_output_dir()
+    os.makedirs(output_dir, exist_ok=True)
+    return output_dir
+
+
+def get_save_path(filename):
+    """
+    获取完整的保存路径
+    
+    参数：
+        filename : str - 文件名或完整路径
+    
+    返回：
+        str - 完整路径
+    
+    说明：
+        - 如果 filename 是绝对路径，直接返回
+        - 如果 filename 只是文件名，则添加默认输出目录
+        - 自动确保输出目录存在
+    """
+    if filename is None:
+        return None
+    
+    # 如果是绝对路径，直接返回（但确保目录存在）
+    if os.path.isabs(filename):
+        dir_path = os.path.dirname(filename)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
+        return filename
+    
+    # 如果包含目录分隔符但不是绝对路径，视为相对于当前工作目录
+    if os.path.dirname(filename):
+        dir_path = os.path.dirname(filename)
+        os.makedirs(dir_path, exist_ok=True)
+        return filename
+    
+    # 否则添加默认输出目录
+    output_dir = ensure_output_dir()
+    return os.path.join(output_dir, filename)
+
+
+# =====================================================
+# 中文字体配置
+# =====================================================
+
+# 标记是否已初始化字体
+_font_initialized = False
+
+def setup_chinese_font():
+    """
+    配置 matplotlib 支持中文显示
+    
+    自动检测系统可用的中文字体，优先级：
+    1. WenQuanYi Micro Hei (文泉驿微米黑) - Linux
+    2. WenQuanYi Zen Hei (文泉驿正黑) - Linux
+    3. Noto Sans CJK SC (思源黑体) - Linux
+    4. SimHei (黑体) - Windows
+    5. Microsoft YaHei (微软雅黑) - Windows
+    6. PingFang SC (苹方) - macOS
+    7. Heiti SC (黑体-简) - macOS
+    8. DejaVu Sans (兜底方案)
+    """
+    global _font_initialized
+    import warnings
+    import matplotlib.font_manager as fm
+    
+    # 刷新字体缓存（确保新安装的字体被识别）
+    if not _font_initialized:
+        try:
+            # 尝试重新加载字体管理器
+            fm._load_fontmanager(try_read_cache=False)
+        except Exception:
+            pass
+        _font_initialized = True
+    
+    # 候选中文字体列表（优先 Linux 字体）
+    chinese_fonts = [
+        'WenQuanYi Micro Hei',  # Linux 文泉驿微米黑
+        'WenQuanYi Zen Hei',    # Linux 文泉驿正黑
+        'Noto Sans CJK SC',     # Linux 思源黑体
+        'Droid Sans Fallback',  # Android/Linux
+        'SimHei',               # Windows 黑体
+        'Microsoft YaHei',      # Windows 微软雅黑
+        'PingFang SC',          # macOS 苹方
+        'Heiti SC',             # macOS 黑体
+        'STHeiti',              # macOS 华文黑体
+        'DejaVu Sans',          # 兜底方案
+    ]
+    
+    # 获取系统可用字体
+    available_fonts = set()
+    try:
+        from matplotlib.font_manager import fontManager
+        for font in fontManager.ttflist:
+            available_fonts.add(font.name)
+    except Exception:
+        pass
+    
+    # 找到第一个可用的中文字体
+    selected_font = None
+    for font in chinese_fonts:
+        if font in available_fonts:
+            selected_font = font
+            break
+    
+    # 如果没有找到，使用 sans-serif 作为默认
+    if selected_font is None:
+        selected_font = 'sans-serif'
+        warnings.warn(
+            "未找到支持中文的字体，中文可能显示为方块。"
+            "建议安装以下字体之一：SimHei, Microsoft YaHei, PingFang SC, "
+            "WenQuanYi Micro Hei, Noto Sans CJK SC",
+            UserWarning
+        )
+    
+    return selected_font
+
+
+def setup_style():
+    """
+    设置全局绘图样式（包含中文支持）
+    """
+    # 使用 seaborn 风格
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except OSError:
+        # 兼容旧版本
+        try:
+            plt.style.use('seaborn-whitegrid')
+        except OSError:
+            pass
+    
+    # 配置中文字体
+    chinese_font = setup_chinese_font()
+    
+    # 设置字体
+    plt.rcParams['font.sans-serif'] = [chinese_font, 'DejaVu Sans', 'Arial']
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+    
+    # 设置字体大小
+    plt.rcParams['font.size'] = 10
+    plt.rcParams['axes.titlesize'] = 12
+    plt.rcParams['axes.labelsize'] = 10
+    plt.rcParams['figure.titlesize'] = 14
+    plt.rcParams['figure.dpi'] = 100
+    
+    # 图例字体
+    plt.rcParams['legend.fontsize'] = 9
+    
+    # 刻度字体
+    plt.rcParams['xtick.labelsize'] = 9
+    plt.rcParams['ytick.labelsize'] = 9
+    
+    # 设置等宽字体（用于统计面板）
+    plt.rcParams['font.monospace'] = [chinese_font, 'DejaVu Sans Mono', 'Courier New']
+
+
+# 获取等宽字体名称（用于统计面板）
+def get_monospace_font():
+    """获取支持中文的等宽字体"""
+    chinese_font = setup_chinese_font()
+    return chinese_font  # 中文字体通常也支持等宽显示
+
+
+# =====================================================
+# 配色方案
+# =====================================================
+
+COLORS = {
+    "primary": "#2E86AB",      # 主色调 - 深蓝
+    "secondary": "#A23B72",    # 次色调 - 紫红
+    "accent": "#F18F01",       # 强调色 - 橙色
+    "success": "#28A745",      # 成功色 - 绿色
+    "danger": "#C73E1D",       # 警告色 - 红色
+    "neutral": "#6C757D",      # 中性色 - 灰色
+}
+
+# 使用状态配色
+STATE_COLORS = {
+    "DeepIdle": "#4ECDC4",     # 青绿色
+    "Social": "#45B7D1",       # 天蓝色
+    "Video": "#96CEB4",        # 浅绿色
+    "Gaming": "#FF6B6B",       # 珊瑚红
+    "Navigation": "#FFE66D",   # 明黄色
+    "Camera": "#DDA0DD",       # 梅红色
+}
+
+# 场景配色
+SCENARIO_COLORS = {
+    "Student Daily": "#2E86AB",
+    "Commute": "#A23B72",
+    "Weekend": "#F18F01",
+    "Travel": "#28A745",
+    "DeepIdle Only": "#6C757D",
+    "Gaming Only": "#DC3545",
+    "Video Only": "#17A2B8",
+    "Navigation Only": "#FFC107",
+}
+
+# 默认颜色列表
+DEFAULT_COLORS = [
+    "#2E86AB", "#A23B72", "#F18F01", "#28A745",
+    "#DC3545", "#17A2B8", "#6C757D", "#FFC107",
+    "#6610F2", "#E83E8C", "#20C997", "#FD7E14"
+]
+
+# 敏感度参数中文标签
+PARAM_LABELS = {
+    "u": "屏幕亮度",
+    "r": "刷新率",
+    "u_cpu": "CPU 利用率",
+    "lambda_cell": "蜂窝网络比例",
+    "delta_signal": "信号质量修正",
+    "r_on": "GPS 开启比例",
+    "r_bg": "后台活跃比例",
+}
+
+
+# =====================================================
+# 工具函数
+# =====================================================
+
+def save_figure(fig, filename, dpi=300, close_after=False):
+    """
+    保存图表到输出目录
+    
+    参数：
+        fig : matplotlib.figure.Figure - 图表对象
+        filename : str - 文件名
+        dpi : int - 分辨率
+        close_after : bool - 保存后是否关闭图表
+    
+    返回：
+        str - 保存的完整路径
+    """
+    save_path = get_save_path(filename)
+    fig.savefig(save_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    print(f"[Save] 图表已保存: {save_path}")
+    
+    if close_after:
+        plt.close(fig)
+    
+    return save_path
+
+
+def smart_savefig(save_path, dpi=300):
+    """
+    智能保存当前图表
+    
+    参数：
+        save_path : str - 保存路径或文件名（如果只是文件名，自动添加输出目录）
+        dpi : int - 分辨率
+    
+    返回：
+        str - 保存的完整路径
+    """
+    if save_path is None:
+        return None
+    
+    full_path = get_save_path(save_path)
+    plt.savefig(full_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    print(f"[Save] 图表已保存: {full_path}")
+    return full_path
+
+
+def to_hours(time_list):
+    """将秒转换为小时"""
+    if isinstance(time_list, list):
+        return [t / 3600 for t in time_list]
+    return time_list / 3600
+
+
+==== src/visualization\distribution.py ====
+
+# visualization/distribution.py
+# TTL 分布可视化模块
+#
+# 提供多种分布可视化方式：
+# - 直方图
+# - 箱线图
+# - 小提琴图
+# - 核密度估计
+# - 综合统计摘要图
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy import stats
+
+# 从统一配置模块导入
+from .config import (
+    setup_style as _setup_style,
+    COLORS,
+    to_hours as _to_hours,
+    save_figure,
+    get_save_path,
+    smart_savefig,
+)
+
+
+# =====================================================
+# 基础分布可视化
+# =====================================================
+
+def plot_ttl_distribution(ttl_list, ax=None, show=True, save_path=None, bins=20):
+    """
+    绘制 TTL 分布直方图
+    
+    参数：
+        ttl_list : list - TTL 列表（秒）
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+        bins : int - 直方图区间数
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+    
+    ttl_h = _to_hours(ttl_list)
+    
+    # 绘制直方图
+    n, bins_edges, patches = ax.hist(ttl_h, bins=bins, edgecolor='white', 
+                                      color=COLORS["primary"], alpha=0.7)
+    
+    # 添加核密度估计曲线
+    kde = stats.gaussian_kde(ttl_h)
+    x_range = np.linspace(min(ttl_h), max(ttl_h), 100)
+    ax.plot(x_range, kde(x_range) * len(ttl_h) * (bins_edges[1] - bins_edges[0]), 
+            color=COLORS["secondary"], linewidth=2, label="核密度估计")
+    
+    # 添加统计线
+    mean_ttl = np.mean(ttl_h)
+    median_ttl = np.median(ttl_h)
+    std_ttl = np.std(ttl_h)
+    
+    ax.axvline(x=mean_ttl, color=COLORS["accent"], linestyle='--', linewidth=2, 
+               label=f"均值: {mean_ttl:.2f} h")
+    ax.axvline(x=median_ttl, color=COLORS["success"], linestyle=':', linewidth=2, 
+               label=f"中位数: {median_ttl:.2f} h")
+    
+    # 标注置信区间
+    ci_low = mean_ttl - 1.96 * std_ttl / np.sqrt(len(ttl_h))
+    ci_high = mean_ttl + 1.96 * std_ttl / np.sqrt(len(ttl_h))
+    ax.axvspan(ci_low, ci_high, alpha=0.2, color=COLORS["accent"], 
+               label=f"95% CI: [{ci_low:.2f}, {ci_high:.2f}]")
+    
+    ax.set_xlabel("续航时间 TTL (小时)", fontsize=11)
+    ax.set_ylabel("频数", fontsize=11)
+    ax.set_title("Monte Carlo 仿真 TTL 分布", fontsize=13, fontweight='bold')
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_ttl_boxplot(ttl_list, ax=None, show=True, save_path=None, label="TTL"):
+    """
+    绘制 TTL 箱线图
+    
+    参数：
+        ttl_list : list - TTL 列表（秒）
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+        label : str - 标签名称
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    
+    ttl_h = _to_hours(ttl_list)
+    
+    # 箱线图
+    bp = ax.boxplot(ttl_h, patch_artist=True, labels=[label])
+    
+    # 设置颜色
+    bp['boxes'][0].set_facecolor(COLORS["primary"])
+    bp['boxes'][0].set_alpha(0.7)
+    bp['medians'][0].set_color(COLORS["accent"])
+    bp['medians'][0].set_linewidth(2)
+    
+    # 添加散点（抖动）
+    jitter = np.random.normal(0, 0.04, size=len(ttl_h))
+    ax.scatter(1 + jitter, ttl_h, alpha=0.3, color=COLORS["secondary"], s=20)
+    
+    # 添加统计标注
+    mean_val = np.mean(ttl_h)
+    ax.scatter([1], [mean_val], color=COLORS["success"], marker='D', s=100, 
+               zorder=5, label=f"均值: {mean_val:.2f} h")
+    
+    ax.set_ylabel("续航时间 TTL (小时)", fontsize=11)
+    ax.set_title("TTL 分布箱线图", fontsize=13, fontweight='bold')
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_ttl_violin(ttl_list, ax=None, show=True, save_path=None, label="TTL"):
+    """
+    绘制 TTL 小提琴图
+    
+    参数：
+        ttl_list : list - TTL 列表（秒）
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+        label : str - 标签名称
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+    
+    ttl_h = _to_hours(ttl_list)
+    
+    # 小提琴图
+    parts = ax.violinplot(ttl_h, positions=[1], showmeans=True, showmedians=True)
+    
+    # 设置颜色
+    for pc in parts['bodies']:
+        pc.set_facecolor(COLORS["primary"])
+        pc.set_alpha(0.7)
+    parts['cmeans'].set_color(COLORS["accent"])
+    parts['cmedians'].set_color(COLORS["secondary"])
+    
+    # 添加散点
+    jitter = np.random.normal(0, 0.04, size=len(ttl_h))
+    ax.scatter(1 + jitter, ttl_h, alpha=0.3, color=COLORS["neutral"], s=15)
+    
+    ax.set_xticks([1])
+    ax.set_xticklabels([label])
+    ax.set_ylabel("续航时间 TTL (小时)", fontsize=11)
+    ax.set_title("TTL 分布小提琴图", fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_ttl_kde(ttl_list, ax=None, show=True, save_path=None, fill=True):
+    """
+    绘制 TTL 核密度估计图
+    
+    参数：
+        ttl_list : list - TTL 列表（秒）
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+        fill : bool - 是否填充曲线下区域
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+    
+    ttl_h = _to_hours(ttl_list)
+    
+    # 核密度估计
+    kde = stats.gaussian_kde(ttl_h)
+    x_range = np.linspace(min(ttl_h) - 0.5, max(ttl_h) + 0.5, 200)
+    density = kde(x_range)
+    
+    # 绘制 KDE 曲线
+    ax.plot(x_range, density, color=COLORS["primary"], linewidth=2.5, label="核密度估计")
+    
+    if fill:
+        ax.fill_between(x_range, density, alpha=0.3, color=COLORS["primary"])
+    
+    # 添加数据点（rug plot）
+    ax.scatter(ttl_h, np.zeros_like(ttl_h) - 0.01 * max(density), 
+               alpha=0.5, color=COLORS["secondary"], s=10, marker='|')
+    
+    # 添加统计信息
+    mean_ttl = np.mean(ttl_h)
+    std_ttl = np.std(ttl_h)
+    
+    ax.axvline(x=mean_ttl, color=COLORS["accent"], linestyle='--', linewidth=2, 
+               label=f"均值: {mean_ttl:.2f} h")
+    ax.axvline(x=mean_ttl - std_ttl, color=COLORS["neutral"], linestyle=':', linewidth=1.5, 
+               label=f"±1σ: [{mean_ttl-std_ttl:.2f}, {mean_ttl+std_ttl:.2f}]")
+    ax.axvline(x=mean_ttl + std_ttl, color=COLORS["neutral"], linestyle=':', linewidth=1.5)
+    
+    ax.set_xlabel("续航时间 TTL (小时)", fontsize=11)
+    ax.set_ylabel("概率密度", fontsize=11)
+    ax.set_title("TTL 核密度估计分布", fontsize=13, fontweight='bold')
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3)
+    ax.set_ylim(bottom=0)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_ttl_statistical_summary(ttl_list, save_path=None):
+    """
+    绘制 TTL 综合统计摘要图（比赛级别可视化）
+    
+    包含：
+    - 直方图 + KDE
+    - 箱线图
+    - 统计信息面板
+    - QQ 图（正态性检验）
+    
+    参数：
+        ttl_list : list - TTL 列表（秒）
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    
+    ttl_h = _to_hours(ttl_list)
+    
+    # ===== 左上：直方图 + KDE =====
+    ax1 = axes[0, 0]
+    n, bins_edges, patches = ax1.hist(ttl_h, bins=20, edgecolor='white', 
+                                       color=COLORS["primary"], alpha=0.7, density=True)
+    kde = stats.gaussian_kde(ttl_h)
+    x_range = np.linspace(min(ttl_h), max(ttl_h), 100)
+    ax1.plot(x_range, kde(x_range), color=COLORS["secondary"], linewidth=2)
+    ax1.set_xlabel("续航时间 TTL (小时)")
+    ax1.set_ylabel("概率密度")
+    ax1.set_title("TTL 分布直方图", fontweight='bold')
+    ax1.grid(True, alpha=0.3)
+    
+    # ===== 右上：箱线图 + 散点 =====
+    ax2 = axes[0, 1]
+    bp = ax2.boxplot(ttl_h, patch_artist=True, vert=True, positions=[1])
+    bp['boxes'][0].set_facecolor(COLORS["primary"])
+    bp['boxes'][0].set_alpha(0.7)
+    bp['medians'][0].set_color(COLORS["accent"])
+    bp['medians'][0].set_linewidth(2)
+    
+    jitter = np.random.normal(0, 0.04, size=len(ttl_h))
+    ax2.scatter(1 + jitter, ttl_h, alpha=0.3, color=COLORS["secondary"], s=20)
+    ax2.set_xticks([1])
+    ax2.set_xticklabels(["TTL"])
+    ax2.set_ylabel("续航时间 (小时)")
+    ax2.set_title("TTL 箱线图", fontweight='bold')
+    ax2.grid(True, alpha=0.3, axis='y')
+    
+    # ===== 左下：QQ 图 =====
+    ax3 = axes[1, 0]
+    stats.probplot(ttl_h, dist="norm", plot=ax3)
+    ax3.set_title("Q-Q 图（正态性检验）", fontweight='bold')
+    ax3.get_lines()[0].set_markerfacecolor(COLORS["primary"])
+    ax3.get_lines()[0].set_alpha(0.6)
+    ax3.get_lines()[1].set_color(COLORS["accent"])
+    ax3.grid(True, alpha=0.3)
+    
+    # ===== 右下：统计信息面板 =====
+    ax4 = axes[1, 1]
+    ax4.axis('off')
+    
+    # 计算统计量
+    n_samples = len(ttl_h)
+    mean_val = np.mean(ttl_h)
+    std_val = np.std(ttl_h)
+    min_val = np.min(ttl_h)
+    max_val = np.max(ttl_h)
+    median_val = np.median(ttl_h)
+    q1 = np.percentile(ttl_h, 25)
+    q3 = np.percentile(ttl_h, 75)
+    iqr = q3 - q1
+    skewness = stats.skew(ttl_h)
+    kurtosis = stats.kurtosis(ttl_h)
+    
+    # Shapiro-Wilk 正态性检验
+    if n_samples <= 5000:
+        _, p_value = stats.shapiro(ttl_h)
+    else:
+        _, p_value = stats.normaltest(ttl_h)
+    
+    # 95% 置信区间
+    ci_low = mean_val - 1.96 * std_val / np.sqrt(n_samples)
+    ci_high = mean_val + 1.96 * std_val / np.sqrt(n_samples)
+    
+    # 使用纯ASCII边框，兼容性更好
+    stats_text = f"""
+    +==========================================+
+    |       [Stats] 统 计 分 析 报 告         |
+    +==========================================+
+    |  样本数量:          {n_samples:>8}              |
+    |                                          |
+    |  ------- 中心趋势 -------                |
+    |  均值 (Mean):        {mean_val:>8.3f} h          |
+    |  中位数 (Median):    {median_val:>8.3f} h          |
+    |  95% 置信区间:  [{ci_low:.3f}, {ci_high:.3f}] h   |
+    |                                          |
+    |  ------- 离散程度 -------                |
+    |  标准差 (Std):       {std_val:>8.3f} h          |
+    |  变异系数 (CV):      {std_val/mean_val*100:>8.2f} %          |
+    |  四分位距 (IQR):     {iqr:>8.3f} h          |
+    |                                          |
+    |  ------- 范围 -------                    |
+    |  最小值 (Min):       {min_val:>8.3f} h          |
+    |  最大值 (Max):       {max_val:>8.3f} h          |
+    |  Q1 (25%):           {q1:>8.3f} h          |
+    |  Q3 (75%):           {q3:>8.3f} h          |
+    |                                          |
+    |  ------- 分布形态 -------                |
+    |  偏度 (Skewness):    {skewness:>8.3f}            |
+    |  峰度 (Kurtosis):    {kurtosis:>8.3f}            |
+    |  正态性检验 p值:     {p_value:>8.4f}            |
+    +==========================================+
+    """
+    
+    ax4.text(0.05, 0.5, stats_text, transform=ax4.transAxes, fontsize=10,
+             verticalalignment='center',
+             bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+    
+    # 总标题
+    fig.suptitle(f"[MC] Monte Carlo 仿真 TTL 统计分析 (n={n_samples})", 
+                 fontsize=14, fontweight='bold', y=1.02)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        smart_savefig(save_path)
+    
+    plt.show()
+    return fig
+
+
+==== src/visualization\sensitivity_plot.py ====
+
+# visualization/sensitivity_plot.py
+# 敏感度分析可视化模块
+#
+# 提供多种敏感度可视化方式：
+# - 柱状图
+# - 龙卷风图
+# - 蜘蛛图
+# - 热力图
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Patch
+
+# 从统一配置模块导入
+from .config import (
+    setup_style as _setup_style,
+    COLORS,
+    PARAM_LABELS,
+    save_figure,
+    get_save_path,
+    smart_savefig,
+)
+
+
+def _get_label(param):
+    """获取参数的中文标签"""
+    return PARAM_LABELS.get(param, param)
+
+
+# =====================================================
+# 敏感度可视化函数
+# =====================================================
+
+def plot_sensitivity_bar(sens_results, ax=None, show=True, save_path=None, 
+                         normalized=True, sort=True):
+    """
+    绘制敏感度柱状图
+    
+    参数：
+        sens_results : dict - 敏感度分析结果
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+        normalized : bool - 是否使用归一化敏感度
+        sort : bool - 是否按敏感度排序
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # 准备数据
+    params = list(sens_results.keys())
+    if normalized:
+        values = [sens_results[p]["S_norm"] for p in params]
+        ylabel = "归一化敏感度 (ΔT/T / Δp/p)"
+    else:
+        values = [sens_results[p]["S"] / 3600 for p in params]  # 转换为小时
+        ylabel = "敏感度 (小时)"
+    
+    labels = [_get_label(p) for p in params]
+    
+    # 排序
+    if sort:
+        sorted_indices = np.argsort(np.abs(values))[::-1]
+        params = [params[i] for i in sorted_indices]
+        values = [values[i] for i in sorted_indices]
+        labels = [labels[i] for i in sorted_indices]
+    
+    # 颜色（正负不同）
+    colors = [COLORS["danger"] if v < 0 else COLORS["success"] for v in values]
+    
+    # 绘制柱状图
+    bars = ax.barh(range(len(params)), values, color=colors, alpha=0.8, edgecolor='white')
+    
+    # 添加数值标签
+    for bar, val in zip(bars, values):
+        width = bar.get_width()
+        ax.text(width + 0.01 * max(np.abs(values)), bar.get_y() + bar.get_height()/2,
+                f'{val:.3f}', ha='left' if val >= 0 else 'right', va='center', fontsize=9)
+    
+    ax.set_yticks(range(len(params)))
+    ax.set_yticklabels(labels)
+    ax.set_xlabel(ylabel, fontsize=11)
+    ax.set_title("参数敏感度分析", fontsize=13, fontweight='bold')
+    ax.axvline(x=0, color='black', linewidth=0.8)
+    ax.grid(True, alpha=0.3, axis='x')
+    
+    # 图例
+    legend_elements = [
+        Patch(facecolor=COLORS["danger"], alpha=0.8, label='负敏感度（参数↑→TTL↓）'),
+        Patch(facecolor=COLORS["success"], alpha=0.8, label='正敏感度（参数↑→TTL↑）')
+    ]
+    ax.legend(handles=legend_elements, loc='lower right', fontsize=9)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_sensitivity_tornado(sens_results, baseline_ttl, ax=None, show=True, 
+                              save_path=None, sort=True):
+    """
+    绘制敏感度龙卷风图
+    
+    参数：
+        sens_results : dict - 敏感度分析结果
+        baseline_ttl : float - 基准 TTL（秒）
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+        sort : bool - 是否按影响大小排序
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 7))
+    
+    baseline_h = baseline_ttl / 3600
+    
+    # 准备数据
+    params = list(sens_results.keys())
+    ttl_plus = [sens_results[p]["TTL+"] / 3600 for p in params]
+    ttl_minus = [sens_results[p]["TTL-"] / 3600 for p in params]
+    labels = [_get_label(p) for p in params]
+    
+    # 计算影响范围
+    ranges = [abs(ttl_plus[i] - ttl_minus[i]) for i in range(len(params))]
+    
+    # 排序
+    if sort:
+        sorted_indices = np.argsort(ranges)[::-1]
+        params = [params[i] for i in sorted_indices]
+        ttl_plus = [ttl_plus[i] for i in sorted_indices]
+        ttl_minus = [ttl_minus[i] for i in sorted_indices]
+        labels = [labels[i] for i in sorted_indices]
+    
+    y_pos = range(len(params))
+    
+    # 绘制龙卷风图
+    for i, (low, high) in enumerate(zip(ttl_minus, ttl_plus)):
+        # 左侧（负扰动）
+        ax.barh(i, low - baseline_h, left=baseline_h, color=COLORS["primary"], 
+                alpha=0.8, height=0.6, label='参数 -20%' if i == 0 else "")
+        # 右侧（正扰动）
+        ax.barh(i, high - baseline_h, left=baseline_h, color=COLORS["accent"], 
+                alpha=0.8, height=0.6, label='参数 +20%' if i == 0 else "")
+    
+    # 基准线
+    ax.axvline(x=baseline_h, color='black', linewidth=2, linestyle='--', 
+               label=f'基准值: {baseline_h:.2f} h')
+    
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels)
+    ax.set_xlabel("续航时间 TTL (小时)", fontsize=11)
+    ax.set_title("参数敏感度龙卷风图", fontsize=13, fontweight='bold')
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3, axis='x')
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_sensitivity_spider(sens_results, ax=None, show=True, save_path=None):
+    """
+    绘制敏感度蜘蛛图（雷达图）
+    
+    参数：
+        sens_results : dict - 敏感度分析结果
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    # 准备数据
+    params = list(sens_results.keys())
+    values = [abs(sens_results[p]["S_norm"]) for p in params]
+    labels = [_get_label(p) for p in params]
+    
+    # 角度
+    angles = np.linspace(0, 2 * np.pi, len(params), endpoint=False).tolist()
+    
+    # 闭合图形
+    values = values + [values[0]]
+    angles = angles + [angles[0]]
+    labels = labels + [labels[0]]
+    
+    # 创建极坐标图
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+    
+    # 绘制蜘蛛图
+    ax.fill(angles, values, color=COLORS["primary"], alpha=0.25)
+    ax.plot(angles, values, color=COLORS["primary"], linewidth=2, marker='o', markersize=8)
+    
+    # 设置标签
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(labels[:-1], fontsize=10)
+    
+    ax.set_title("参数敏感度蜘蛛图\n（归一化敏感度绝对值）", fontsize=13, fontweight='bold', y=1.1)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_sensitivity_heatmap(sens_results, ax=None, show=True, save_path=None):
+    """
+    绘制敏感度热力图
+    
+    参数：
+        sens_results : dict - 敏感度分析结果
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # 准备数据
+    params = list(sens_results.keys())
+    labels = [_get_label(p) for p in params]
+    
+    # 创建数据矩阵
+    data = np.zeros((len(params), 3))
+    for i, p in enumerate(params):
+        data[i, 0] = sens_results[p]["TTL-"] / 3600
+        data[i, 1] = (sens_results[p]["TTL+"] + sens_results[p]["TTL-"]) / 2 / 3600  # 基准近似
+        data[i, 2] = sens_results[p]["TTL+"] / 3600
+    
+    # 绘制热力图
+    im = ax.imshow(data, cmap='RdYlGn', aspect='auto')
+    
+    # 设置标签
+    ax.set_yticks(range(len(params)))
+    ax.set_yticklabels(labels)
+    ax.set_xticks([0, 1, 2])
+    ax.set_xticklabels(['参数 -20%', '基准', '参数 +20%'])
+    
+    # 添加数值标注
+    for i in range(len(params)):
+        for j in range(3):
+            text = ax.text(j, i, f'{data[i, j]:.2f}',
+                          ha="center", va="center", color="black", fontsize=10)
+    
+    # 颜色条
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label('续航时间 TTL (小时)', fontsize=10)
+    
+    ax.set_title("参数敏感度热力图", fontsize=13, fontweight='bold')
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
+    """
+    绘制敏感度分析综合图表（比赛级别可视化）
+    
+    包含：
+    - 柱状图
+    - 龙卷风图
+    - 蜘蛛图
+    - 统计面板
+    
+    参数：
+        sens_results : dict - 敏感度分析结果
+        baseline_ttl : float - 基准 TTL（秒）
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    fig = plt.figure(figsize=(16, 12))
+    
+    # ===== 左上：归一化敏感度柱状图 =====
+    ax1 = fig.add_subplot(2, 2, 1)
+    plot_sensitivity_bar(sens_results, ax=ax1, show=False, normalized=True)
+    
+    # ===== 右上：龙卷风图 =====
+    ax2 = fig.add_subplot(2, 2, 2)
+    plot_sensitivity_tornado(sens_results, baseline_ttl, ax=ax2, show=False)
+    
+    # ===== 左下：蜘蛛图 =====
+    ax3 = fig.add_subplot(2, 2, 3, polar=True)
+    plot_sensitivity_spider(sens_results, ax=ax3, show=False)
+    
+    # ===== 右下：统计面板 =====
+    ax4 = fig.add_subplot(2, 2, 4)
+    ax4.axis('off')
+    
+    # 计算关键洞察
+    params = list(sens_results.keys())
+    s_norms = {p: sens_results[p]["S_norm"] for p in params}
+    
+    # 找出最敏感的参数
+    most_sensitive = max(params, key=lambda p: abs(s_norms[p]))
+    least_sensitive = min(params, key=lambda p: abs(s_norms[p]))
+    
+    # 正负敏感参数
+    positive_sens = [p for p in params if s_norms[p] > 0]
+    negative_sens = [p for p in params if s_norms[p] < 0]
+    
+    # 使用纯ASCII边框，兼容性更好
+    insights_text_parts = [f"""
+    +==================================================+
+    |         [Sens] 敏 感 度 分 析 洞 察              |
+    +==================================================+
+    |                                                  |
+    |  基准续航时间:  {baseline_ttl/3600:>8.2f} 小时                 |
+    |                                                  |
+    |  ----------- 关键发现 -----------                |
+    |                                                  |
+    |  [!] 最敏感参数:  {_get_label(most_sensitive):<15}             |
+    |      敏感度: {s_norms[most_sensitive]:>8.4f}                       |
+    |                                                  |
+    |  [o] 最不敏感参数: {_get_label(least_sensitive):<15}            |
+    |      敏感度: {s_norms[least_sensitive]:>8.4f}                       |
+    |                                                  |
+    |  ----------- 参数分类 -----------                |
+    |                                                  |
+    |  负敏感度（增加->减少TTL）:                       |
+    """]
+    
+    # 使用列表收集字符串，避免循环中字符串拼接
+    for p in negative_sens:
+        insights_text_parts.append(f"|    - {_get_label(p):<20} ({s_norms[p]:.4f})      |\n")
+    
+    insights_text_parts.append("""|                                                  |
+|  正敏感度（增加->增加TTL）:                       |
+""")
+    
+    for p in positive_sens:
+        insights_text_parts.append(f"|    - {_get_label(p):<20} ({s_norms[p]:.4f})      |\n")
+    
+    insights_text_parts.append("""|                                                  |
++==================================================+
+""")
+    
+    insights_text = ''.join(insights_text_parts)
+    
+    ax4.text(0.05, 0.5, insights_text, transform=ax4.transAxes, fontsize=9,
+             verticalalignment='center',
+             bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
+    
+    # 总标题
+    fig.suptitle("[Sensitivity] 参数敏感度分析综合报告", fontsize=16, fontweight='bold', y=1.02)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        smart_savefig(save_path)
+    
+    plt.show()
+    return fig
+
+
+==== src/visualization\timeseries.py ====
+
+# visualization/timeseries.py
+# 单次仿真时间序列可视化模块
+#
+# 提供丰富的时间序列可视化功能：
+# - SOC 曲线
+# - 功耗曲线
+# - 温度曲线
+# - 使用状态时间线
+# - 综合仪表板
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import numpy as np
+from matplotlib.gridspec import GridSpec
+
+# 从统一配置模块导入
+from .config import (
+    setup_style as _setup_style,
+    COLORS,
+    STATE_COLORS,
+    to_hours as _to_hours,
+    save_figure,
+    get_save_path,
+    smart_savefig,
+)
+
+
+# =====================================================
+# 单独曲线绘制函数
+# =====================================================
+
+def plot_soc_curve(result, ax=None, show=True, save_path=None):
+    """
+    绘制 SOC（电量）随时间变化曲线
+    
+    参数：
+        result : dict - 仿真结果
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 5))
+    
+    time_h = _to_hours(result["time"])
+    soc_percent = [s * 100 for s in result["SOC"]]
+    
+    # 主曲线
+    ax.plot(time_h, soc_percent, color=COLORS["primary"], linewidth=2, label="SOC")
+    
+    # 关键电量线
+    ax.axhline(y=20, color=COLORS["success"], linestyle='--', alpha=0.7, label="低电量警告 (20%)")
+    ax.axhline(y=5, color='red', linestyle='--', alpha=0.7, label="极低电量 (5%)")
+    
+    # 填充区域
+    ax.fill_between(time_h, soc_percent, alpha=0.3, color=COLORS["primary"])
+    
+    ax.set_xlabel("时间 (小时)", fontsize=11)
+    ax.set_ylabel("电量 SOC (%)", fontsize=11)
+    ax.set_title("电池电量变化曲线", fontsize=13, fontweight='bold')
+    ax.set_ylim(0, 105)
+    ax.set_xlim(0, max(time_h))
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_power_curve(result, ax=None, show=True, save_path=None):
+    """
+    绘制功耗随时间变化曲线
+    
+    参数：
+        result : dict - 仿真结果
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 5))
+    
+    time_h = _to_hours(result["time"])
+    power = result["Power"]
+    
+    # 计算滑动平均（平滑曲线）
+    window_size = min(100, len(power) // 10) if len(power) > 100 else 1
+    if window_size > 1:
+        power_smooth = np.convolve(power, np.ones(window_size)/window_size, mode='valid')
+        time_smooth = time_h[:len(power_smooth)]
+    else:
+        power_smooth = power
+        time_smooth = time_h
+    
+    # 原始数据（半透明）
+    ax.plot(time_h, power, color=COLORS["neutral"], alpha=0.3, linewidth=0.5, label="瞬时功耗")
+    
+    # 平滑曲线
+    ax.plot(time_smooth, power_smooth, color=COLORS["accent"], linewidth=2, label="平滑功耗")
+    
+    # 平均功耗线
+    avg_power = np.mean(power)
+    ax.axhline(y=avg_power, color=COLORS["secondary"], linestyle='--', alpha=0.8, 
+               label=f"平均功耗: {avg_power:.2f} W")
+    
+    ax.set_xlabel("时间 (小时)", fontsize=11)
+    ax.set_ylabel("功耗 (W)", fontsize=11)
+    ax.set_title("系统功耗变化曲线", fontsize=13, fontweight='bold')
+    ax.set_xlim(0, max(time_h))
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_temperature_curve(result, ax=None, show=True, save_path=None, T_amb=298.15):
+    """
+    绘制温度随时间变化曲线
+    
+    参数：
+        result : dict - 仿真结果
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+        T_amb : float - 环境温度（K）
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 5))
+    
+    time_h = _to_hours(result["time"])
+    temp_c = [tb - 273.15 for tb in result["Tb"]]  # 转换为摄氏度
+    T_amb_c = T_amb - 273.15
+    
+    # 温度曲线
+    ax.plot(time_h, temp_c, color=COLORS["success"], linewidth=2, label="电池温度")
+    
+    # 环境温度参考线
+    ax.axhline(y=T_amb_c, color=COLORS["neutral"], linestyle='--', alpha=0.7, 
+               label=f"环境温度: {T_amb_c:.1f}°C")
+    
+    # 高温警告线
+    ax.axhline(y=45, color='red', linestyle=':', alpha=0.7, label="高温警告 (45°C)")
+    
+    # 温度区域填充
+    ax.fill_between(time_h, T_amb_c, temp_c, alpha=0.2, color=COLORS["success"])
+    
+    ax.set_xlabel("时间 (小时)", fontsize=11)
+    ax.set_ylabel("温度 (°C)", fontsize=11)
+    ax.set_title("电池温度变化曲线", fontsize=13, fontweight='bold')
+    ax.set_xlim(0, max(time_h))
+    ax.legend(loc='upper right', fontsize=9)
+    ax.grid(True, alpha=0.3)
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_state_timeline(result, ax=None, show=True, save_path=None):
+    """
+    绘制使用状态时间线图
+    
+    参数：
+        result : dict - 仿真结果
+        ax : matplotlib.axes.Axes - 可选的绑定轴
+        show : bool - 是否显示图形
+        save_path : str - 保存路径
+    """
+    _setup_style()
+    
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 3))
+    
+    time_h = _to_hours(result["time"])
+    states = result["State"]
+    
+    # 将状态转换为数值用于绘制
+    unique_states = list(set(states))
+    state_to_num = {s: i for i, s in enumerate(unique_states)}
+    
+    # 绘制状态色块
+    prev_state = states[0]
+    start_time = time_h[0]
+    labeled_states = set()  # 使用集合跟踪已标注的状态
+    
+    for i, (t, state) in enumerate(zip(time_h, states)):
+        if state != prev_state or i == len(states) - 1:
+            color = STATE_COLORS.get(prev_state, COLORS["neutral"])
+            # 使用集合进行 O(1) 查找
+            label = prev_state if prev_state not in labeled_states else ""
+            ax.axvspan(start_time, t, alpha=0.7, color=color, label=label)
+            if label:
+                labeled_states.add(prev_state)
+            start_time = t
+            prev_state = state
+    
+    # 创建图例
+    handles = [mpatches.Patch(color=STATE_COLORS.get(s, COLORS["neutral"]), label=s) 
+               for s in unique_states]
+    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.15), 
+              ncol=len(unique_states), fontsize=9)
+    
+    ax.set_xlabel("时间 (小时)", fontsize=11)
+    ax.set_ylabel("使用状态", fontsize=11)
+    ax.set_title("手机使用状态时间线", fontsize=13, fontweight='bold')
+    ax.set_xlim(0, max(time_h))
+    ax.set_yticks([])
+    
+    if save_path:
+        smart_savefig(save_path)
+    if show:
+        plt.tight_layout()
+        plt.show()
+    
+    return ax
+
+
+def plot_single_run(result, save_path=None):
+    """
+    绘制单次仿真的基础图表（SOC + 功耗）
+    
+    参数：
+        result : dict - 仿真结果
+        save_path : str - 保存路径或文件名
+    """
+    _setup_style()
+    
+    fig, axes = plt.subplots(2, 1, figsize=(12, 8))
+    
+    # SOC 曲线
+    plot_soc_curve(result, ax=axes[0], show=False)
+    
+    # 功耗曲线
+    plot_power_curve(result, ax=axes[1], show=False)
+    
+    # 添加总标题
+    ttl_hours = result["TTL"] / 3600
+    fig.suptitle(f"电池仿真结果 | 续航时间 TTL = {ttl_hours:.2f} 小时", 
+                 fontsize=14, fontweight='bold', y=1.02)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        smart_savefig(save_path)
+    
+    plt.show()
+    return fig
+
+
+def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15):
+    """
+    绘制综合仪表板（比赛级别可视化）
+    
+    包含：
+    - SOC 曲线
+    - 功耗曲线
+    - 温度曲线
+    - 状态时间线
+    - 统计信息面板
+    
+    参数：
+        result : dict - 仿真结果
+        save_path : str - 保存路径
+        T_amb : float - 环境温度（K）
+    """
+    _setup_style()
+    
+    fig = plt.figure(figsize=(16, 12))
+    gs = GridSpec(4, 4, figure=fig, height_ratios=[2, 2, 2, 1], hspace=0.3, wspace=0.3)
+    
+    # ===== SOC 曲线 (左上) =====
+    ax1 = fig.add_subplot(gs[0, :3])
+    plot_soc_curve(result, ax=ax1, show=False)
+    
+    # ===== 统计信息面板 (右上) =====
+    ax_stats = fig.add_subplot(gs[0, 3])
+    ax_stats.axis('off')
+    
+    # 计算统计信息
+    ttl_hours = result["TTL"] / 3600
+    avg_power = np.mean(result["Power"])
+    max_power = np.max(result["Power"])
+    min_power = np.min(result["Power"])
+    avg_temp = np.mean(result["Tb"]) - 273.15
+    max_temp = np.max(result["Tb"]) - 273.15
+    
+    # 统计文本（使用纯ASCII边框，兼容性更好）
+    stats_text = f"""
+    +-------------------------+
+    |   仿 真 统 计 摘 要     |
+    +-------------------------+
+    |  续航时间:  {ttl_hours:>6.2f} h   |
+    |                         |
+    |  平均功耗:  {avg_power:>6.2f} W   |
+    |  最大功耗:  {max_power:>6.2f} W   |
+    |  最小功耗:  {min_power:>6.2f} W   |
+    |                         |
+    |  平均温度:  {avg_temp:>6.1f} °C  |
+    |  最高温度:  {max_temp:>6.1f} °C  |
+    +-------------------------+
+    """
+    ax_stats.text(0.1, 0.5, stats_text, transform=ax_stats.transAxes, fontsize=10,
+                  verticalalignment='center',
+                  bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    # ===== 功耗曲线 (中左) =====
+    ax2 = fig.add_subplot(gs[1, :3])
+    plot_power_curve(result, ax=ax2, show=False)
+    
+    # ===== 功耗分布饼图 (中右) =====
+    ax_pie = fig.add_subplot(gs[1, 3])
+    states = result["State"]
+    powers = result["Power"]
+    
+    # 按状态计算总能耗
+    state_energy = {}
+    for state, power in zip(states, powers):
+        if state not in state_energy:
+            state_energy[state] = 0
+        state_energy[state] += power  # 假设 dt=1s
+    
+    labels = list(state_energy.keys())
+    sizes = list(state_energy.values())
+    colors = [STATE_COLORS.get(s, COLORS["neutral"]) for s in labels]
+    
+    ax_pie.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
+    ax_pie.set_title("各状态能耗占比", fontsize=11, fontweight='bold')
+    
+    # ===== 温度曲线 (下左) =====
+    ax3 = fig.add_subplot(gs[2, :3])
+    plot_temperature_curve(result, ax=ax3, show=False, T_amb=T_amb)
+    
+    # ===== 状态时间占比条形图 (下右) =====
+    ax_bar = fig.add_subplot(gs[2, 3])
+    
+    # 计算状态时间占比
+    from collections import Counter
+    state_counts = Counter(states)
+    total = sum(state_counts.values())
+    state_ratios = {k: v/total*100 for k, v in state_counts.items()}
+    
+    bars = ax_bar.barh(list(state_ratios.keys()), list(state_ratios.values()),
+                       color=[STATE_COLORS.get(s, COLORS["neutral"]) for s in state_ratios.keys()])
+    ax_bar.set_xlabel("时间占比 (%)", fontsize=10)
+    ax_bar.set_title("状态时间分布", fontsize=11, fontweight='bold')
+    
+    # ===== 状态时间线 (底部) =====
+    ax4 = fig.add_subplot(gs[3, :])
+    plot_state_timeline(result, ax=ax4, show=False)
+    
+    # ===== 总标题 =====
+    fig.suptitle(f"[Battery] 电池仿真综合仪表板 | 续航时间: {ttl_hours:.2f} 小时", 
+                 fontsize=16, fontweight='bold', y=0.98)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        smart_savefig(save_path)
+    
+    plt.show()
+    return fig
+
+
+==== src/visualization\__init__.py ====
+
+# visualization/__init__.py
+# 可视化模块初始化
+#
+# 提供统一的可视化接口，包含：
+# - 时间序列可视化
+# - 分布可视化
+# - 敏感度分析可视化
+# - 场景对比可视化
+# - 配置管理（字体、输出目录）
+
+# 导出配置函数
+from .config import (
+    setup_style,
+    set_output_dir,
+    get_output_dir,
+    get_save_path,
+    save_figure,
+    smart_savefig,
+    ensure_output_dir,
+    get_monospace_font,
+    COLORS,
+    STATE_COLORS,
+    SCENARIO_COLORS,
+    PARAM_LABELS,
+)
+
+from .timeseries import (
+    plot_single_run,
+    plot_soc_curve,
+    plot_power_curve,
+    plot_temperature_curve,
+    plot_state_timeline,
+    plot_comprehensive_dashboard,
+)
+
+from .distribution import (
+    plot_ttl_distribution,
+    plot_ttl_boxplot,
+    plot_ttl_violin,
+    plot_ttl_kde,
+    plot_ttl_statistical_summary,
+)
+
+from .sensitivity_plot import (
+    plot_sensitivity_bar,
+    plot_sensitivity_tornado,
+    plot_sensitivity_spider,
+    plot_sensitivity_heatmap,
+)
+
+from .comparison import (
+    plot_scenario_comparison,
+    plot_scenario_boxplot,
+    plot_scenario_radar,
+    plot_multi_scenario_timeline,
+)
+
+__all__ = [
+    # 配置
+    "setup_style",
+    "set_output_dir",
+    "get_output_dir",
+    "get_save_path",
+    "save_figure",
+    "ensure_output_dir",
+    "COLORS",
+    "STATE_COLORS",
+    "SCENARIO_COLORS",
+    "PARAM_LABELS",
+    # 时间序列
+    "plot_single_run",
+    "plot_soc_curve",
+    "plot_power_curve",
+    "plot_temperature_curve",
+    "plot_state_timeline",
+    "plot_comprehensive_dashboard",
+    # 分布
+    "plot_ttl_distribution",
+    "plot_ttl_boxplot",
+    "plot_ttl_violin",
+    "plot_ttl_kde",
+    "plot_ttl_statistical_summary",
+    # 敏感度
+    "plot_sensitivity_bar",
+    "plot_sensitivity_tornado",
+    "plot_sensitivity_spider",
+    "plot_sensitivity_heatmap",
+    # 对比
+    "plot_scenario_comparison",
+    "plot_scenario_boxplot",
+    "plot_scenario_radar",
+    "plot_multi_scenario_timeline",
+]
