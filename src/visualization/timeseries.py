@@ -401,174 +401,235 @@ def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15, show=None
 
 
 # =====================================================
-# 复合图表1：温度 + 功耗堆叠图 + 状态时间线
+# 复合图表1：温度 + 功耗堆叠图 + 状态时间线（改进版：不拥挤、更协调）
 # =====================================================
 
 def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=None):
     """
     绘制复合图表：温度变化曲线 + 子模块功耗堆叠图 + 使用状态时间线
-    
-    这是一个专业级的复合可视化图表，包含三个面板：
-    1. 上方：电池温度变化曲线
-    2. 中间：子模块功耗堆叠面积图（屏幕、CPU、无线通信、GPS、后台）
-    3. 下方：手机使用状态时间线
-    
-    参数：
-        result : dict - 仿真结果（需要包含 Power_screen 等子模块数据）
-        save_path : str - 保存路径
-        T_amb : float - 环境温度（K）
-        show : bool - 是否显示图形，None 则使用全局设置
-    
-    返回：
-        fig : matplotlib.figure.Figure - 图表对象
+
+    改进点：
+    - 去除 emoji（避免 SimHei 缺字形警告）
+    - 堆叠图使用低饱和配色 + 白色细分隔线，层次更清晰
+    - 堆叠图图例外置，减少图内拥挤
+    - 平均功耗线不进入 legend，改用右上角注释
+    - 适度弱化网格/边框，整体更协调
     """
     _setup_style()
-    
-    # 创建图表布局（3 行，高度比例 2:3:1）
+
+    # 创建图表布局（温度:功耗:状态 = 1.6:2.8:0.8），更协调
     fig = plt.figure(figsize=(14, 10))
-    gs = GridSpec(3, 1, figure=fig, height_ratios=[2, 3, 1], hspace=0.25)
-    
+    gs = GridSpec(3, 1, figure=fig, height_ratios=[1.6, 2.8, 0.8], hspace=0.22)
+
     time_h = _to_hours(result["time"])
-    
+
     # ===== 面板1：温度曲线 =====
     ax1 = fig.add_subplot(gs[0])
-    temp_c = [tb - 273.15 for tb in result["Tb"]]
+    temp_c = [tb - 273.15 for tb in result["Tb"]]  # K -> °C
     T_amb_c = T_amb - 273.15
-    
-    # 温度曲线主线
-    ax1.plot(time_h, temp_c, color=COLORS["danger"], linewidth=2.5, label="电池温度")
-    
-    # 环境温度参考线
-    ax1.axhline(y=T_amb_c, color=COLORS["neutral"], linestyle='--', alpha=0.8, 
-                linewidth=1.5, label=f"环境温度: {T_amb_c:.1f}°C")
-    
-    # 高温警告区域
-    ax1.axhline(y=45, color='red', linestyle=':', alpha=0.6, linewidth=1.5, label="高温警告 (45°C)")
-    ax1.axhspan(45, max(temp_c) + 5 if max(temp_c) > 45 else 50, alpha=0.1, color='red')
-    
-    # 温度升高填充
-    ax1.fill_between(time_h, T_amb_c, temp_c, alpha=0.25, color=COLORS["danger"])
-    
-    ax1.set_ylabel("温度 (°C)", fontsize=12, fontweight='bold')
-    ax1.set_title("🌡️ 电池温度变化", fontsize=13, fontweight='bold', loc='left')
-    ax1.legend(loc='upper right', fontsize=9, framealpha=0.9)
-    ax1.grid(True, alpha=0.3, linestyle='-')
+
+    ax1.plot(time_h, temp_c, color=COLORS["danger"], linewidth=2.2, label="电池温度")
+    ax1.axhline(
+        y=T_amb_c,
+        color=COLORS["neutral"],
+        linestyle="--",
+        alpha=0.75,
+        linewidth=1.4,
+        label=f"环境温度: {T_amb_c:.1f}°C",
+    )
+
+    # 高温警告线 + 轻微背景提示
+    ax1.axhline(y=45, color="red", linestyle=":", alpha=0.55, linewidth=1.4, label="高温警告 (45°C)")
+    ax1.axhspan(45, max(50, max(temp_c) + 2), alpha=0.08, color="red")
+
+    ax1.fill_between(time_h, T_amb_c, temp_c, alpha=0.18, color=COLORS["danger"])
+
+    ax1.set_ylabel("温度 (°C)", fontsize=12, fontweight="bold")
+    ax1.set_title("电池温度变化", fontsize=12.5, fontweight="bold", loc="left")
+    ax1.legend(loc="upper right", fontsize=9, framealpha=0.9)
+    ax1.grid(True, alpha=0.18, linestyle="-")
     ax1.set_xlim(0, max(time_h))
-    ax1.set_xticklabels([])  # 隐藏 x 轴标签，与下方共享
-    
+    ax1.set_xticklabels([])  # 隐藏 x 轴标签
+
+    # 弱化边框
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
     # ===== 面板2：功耗堆叠图 =====
     ax2 = fig.add_subplot(gs[1])
-    
-    # 检查是否有子模块功耗数据
+
     has_breakdown = "Power_screen" in result
-    
+
     if has_breakdown:
-        # 子模块功耗数据
         p_screen = np.array(result["Power_screen"])
         p_cpu = np.array(result["Power_cpu"])
         p_radio = np.array(result["Power_radio"])
         p_gps = np.array(result["Power_gps"])
         p_bg = np.array(result["Power_background"])
-        
-        # 功耗堆叠配色方案（专业渐变色）
+
+        # 低饱和、论文友好配色
         colors_stack = {
-            "屏幕": "#FF6B6B",      # 珊瑚红
-            "CPU": "#4ECDC4",       # 青绿色
-            "无线通信": "#45B7D1",   # 天蓝色
-            "GPS": "#96CEB4",       # 薄荷绿
-            "后台": "#DDA0DD",      # 淡紫色
+            "屏幕":   "#B7BBBF",  # 深灰蓝
+            "GPS":    "#DEB846",  # 深金黄
+            "无线通信": "#6DB3DC",  # 深青蓝
+            "CPU":    "#3DC287",  # 深墨绿
+            "后台":   "#845057",  # 深酒红
         }
-        
-        # 绘制堆叠面积图
+
+        # 固定堆叠顺序：底噪 -> 少量 -> 变化中等 -> 峰值（读图更自然）
+        layers = [p_bg, p_gps, p_radio, p_cpu, p_screen]
+        labels = ["后台", "GPS", "无线通信", "CPU", "屏幕"]
+        colors = [colors_stack[k] for k in labels]
+
+        # 堆叠面积图：加白色细分隔线，层次立刻清晰
         ax2.stackplot(
             time_h,
-            p_bg, p_gps, p_radio, p_cpu, p_screen,
-            labels=["后台", "GPS", "无线通信", "CPU", "屏幕"],
-            colors=[colors_stack["后台"], colors_stack["GPS"], 
-                    colors_stack["无线通信"], colors_stack["CPU"], colors_stack["屏幕"]],
-            alpha=0.85,
+            *layers,
+            labels=labels,
+            colors=colors,
+            alpha=0.75,
+            linewidth=0.6,
+            edgecolor="white",
         )
-        
-        # 总功耗轮廓线
+
+        # 总功耗轮廓线（细一些，避免喧宾夺主）
         total_power_arr = p_screen + p_cpu + p_radio + p_gps + p_bg
-        ax2.plot(time_h, total_power_arr, color='black', linewidth=1.5, 
-                 linestyle='-', alpha=0.7, label="总功耗")
-        
-        # 平均功耗线
-        avg_power = np.mean(total_power_arr)
-        ax2.axhline(y=avg_power, color='white', linestyle='--', 
-                    linewidth=2, alpha=0.9, label=f"平均功耗: {avg_power:.2f} W")
-        
-        ax2.legend(loc='upper right', fontsize=9, framealpha=0.9, ncol=2)
+        ax2.plot(
+            time_h,
+            total_power_arr,
+            color="black",
+            linewidth=1.2,
+            linestyle="-",
+            alpha=0.65,
+            label="总功耗",
+        )
+
+        # 平均功耗：不进 legend，用注释显示，减少拥挤
+        avg_power = float(np.mean(total_power_arr))
+        ax2.axhline(avg_power, color="black", linestyle="--", linewidth=1.6, alpha=0.75)
+        ax2.text(
+            0.99,
+            0.93,
+            f"平均功耗: {avg_power:.2f} W",
+            transform=ax2.transAxes,
+            ha="right",
+            va="top",
+            fontsize=9,
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none", pad=2.5),
+        )
+
+        # 图例外置到右侧
+        ax2.legend(
+            loc="upper left",
+            bbox_to_anchor=(1.01, 1.0),
+            frameon=False,
+            fontsize=9,
+        )
+
+        # 给右侧图例留空间
+        fig.subplots_adjust(right=0.82)
+
     else:
-        # 如果没有子模块数据，绘制普通功耗曲线
-        power = result["Power"]
-        ax2.fill_between(time_h, 0, power, alpha=0.6, color=COLORS["accent"])
-        ax2.plot(time_h, power, color=COLORS["accent"], linewidth=1.5)
-        
-        avg_power = np.mean(power)
-        ax2.axhline(y=avg_power, color=COLORS["secondary"], linestyle='--', 
-                    linewidth=2, alpha=0.8, label=f"平均功耗: {avg_power:.2f} W")
-        ax2.legend(loc='upper right', fontsize=9)
-    
-    ax2.set_ylabel("功耗 (W)", fontsize=12, fontweight='bold')
-    ax2.set_title("⚡ 系统功耗分解（堆叠图）", fontsize=13, fontweight='bold', loc='left')
-    ax2.grid(True, alpha=0.3, linestyle='-')
+        power = np.array(result["Power"])
+
+        ax2.fill_between(time_h, 0, power, alpha=0.45, color=COLORS["accent"])
+        ax2.plot(time_h, power, color=COLORS["accent"], linewidth=1.6)
+
+        avg_power = float(np.mean(power))
+        ax2.axhline(avg_power, color="black", linestyle="--", linewidth=1.6, alpha=0.75)
+        ax2.text(
+            0.99,
+            0.93,
+            f"平均功耗: {avg_power:.2f} W",
+            transform=ax2.transAxes,
+            ha="right",
+            va="top",
+            fontsize=9,
+            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none", pad=2.5),
+        )
+
+        ax2.set_xlim(0, max(time_h))
+
+    ax2.set_ylabel("功耗 (W)", fontsize=12, fontweight="bold")
+    ax2.set_title("系统功耗分解（堆叠）", fontsize=12.5, fontweight="bold", loc="left")
+    ax2.grid(True, alpha=0.18, linestyle="-")
     ax2.set_xlim(0, max(time_h))
     ax2.set_ylim(0, None)
-    ax2.set_xticklabels([])  # 隐藏 x 轴标签
-    
+    ax2.set_xticklabels([])
+
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_visible(False)
+
     # ===== 面板3：状态时间线 =====
     ax3 = fig.add_subplot(gs[2])
-    
+
     states = result["State"]
-    unique_states = list(set(states))
-    
-    # 绘制状态色块
+
+    # 保持状态出现顺序（避免 set() 导致顺序随机）
+    unique_states = []
+    for s in states:
+        if s not in unique_states:
+            unique_states.append(s)
+
     prev_state = states[0]
     start_time = time_h[0]
     labeled_states = set()
-    
+
     for i, (t, state) in enumerate(zip(time_h, states)):
-        if state != prev_state or i == len(states) - 1:
+        is_last = (i == len(states) - 1)
+        if state != prev_state or is_last:
+            end_t = t if not is_last else time_h[-1]
             color = STATE_COLORS.get(prev_state, COLORS["neutral"])
             label = prev_state if prev_state not in labeled_states else ""
-            ax3.axvspan(start_time, t, alpha=0.85, color=color, label=label)
+            ax3.axvspan(start_time, end_t, alpha=0.85, color=color, label=label)
             if label:
                 labeled_states.add(prev_state)
             start_time = t
             prev_state = state
-    
-    # 图例放在图表下方
-    handles = [mpatches.Patch(color=STATE_COLORS.get(s, COLORS["neutral"]), label=s) 
-               for s in unique_states]
-    ax3.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.3), 
-               ncol=len(unique_states), fontsize=10, framealpha=0.9)
-    
-    ax3.set_xlabel("时间 (小时)", fontsize=12, fontweight='bold')
-    ax3.set_ylabel("状态", fontsize=12, fontweight='bold')
-    ax3.set_title("📱 手机使用状态时间线", fontsize=13, fontweight='bold', loc='left')
+
+    handles = [mpatches.Patch(color=STATE_COLORS.get(s, COLORS["neutral"]), label=s) for s in unique_states]
+    ax3.legend(
+        handles=handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.35),
+        ncol=min(len(unique_states), 6),
+        fontsize=9,
+        framealpha=0.9,
+    )
+
+    ax3.set_xlabel("时间 (小时)", fontsize=12, fontweight="bold")
+    ax3.set_ylabel("状态", fontsize=12, fontweight="bold")
+    ax3.set_title("手机使用状态时间线", fontsize=12.5, fontweight="bold", loc="left")
     ax3.set_xlim(0, max(time_h))
     ax3.set_yticks([])
-    
+    ax3.grid(False)
+
+    ax3.spines["top"].set_visible(False)
+    ax3.spines["right"].set_visible(False)
+    ax3.spines["left"].set_visible(False)
+
     # ===== 总标题 =====
     ttl_hours = result["TTL"] / 3600
     fig.suptitle(
-        f"📊 电池仿真综合分析 | 续航时间: {ttl_hours:.2f} 小时",
-        fontsize=16, fontweight='bold', y=0.98
+        f"电池仿真综合分析 | 续航时间: {ttl_hours:.2f} 小时",
+        fontsize=14.5,
+        fontweight="bold",
+        y=0.98,
     )
-    
+
+    # tight_layout 对 GridSpec/外置图例可能不完美，但保存时 bbox_inches 会兜底
     plt.tight_layout(rect=[0, 0.05, 1, 0.96])
-    
+
     if save_path:
         smart_savefig(save_path)
-    
+
     if show is None:
         show = get_show_plots()
     if show:
         plt.show()
-    
+
     return fig
+
 
 
 # =====================================================
