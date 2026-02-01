@@ -11,45 +11,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Patch
 
-# =====================================================
-# 配色方案
-# =====================================================
-
-# 场景配色（每个场景一种颜色）
-SCENARIO_COLORS = {
-    "Student Daily": "#2E86AB",
-    "Commute": "#A23B72",
-    "Weekend": "#F18F01",
-    "Travel": "#28A745",
-    "DeepIdle Only": "#6C757D",
-    "Gaming Only": "#DC3545",
-    "Video Only": "#17A2B8",
-    "Navigation Only": "#FFC107",
-}
-
-# 默认颜色列表
-DEFAULT_COLORS = [
-    "#2E86AB", "#A23B72", "#F18F01", "#28A745",
-    "#DC3545", "#17A2B8", "#6C757D", "#FFC107",
-    "#6610F2", "#E83E8C", "#20C997", "#FD7E14"
-]
-
-
-def _setup_style():
-    """设置全局绘图样式"""
-    plt.style.use('seaborn-v0_8-whitegrid')
-    plt.rcParams['font.size'] = 10
-    plt.rcParams['axes.titlesize'] = 12
-    plt.rcParams['axes.labelsize'] = 10
-    plt.rcParams['figure.titlesize'] = 14
-    plt.rcParams['figure.dpi'] = 100
-
-
-def _to_hours(ttl_list):
-    """将秒转换为小时"""
-    if isinstance(ttl_list, list):
-        return [t / 3600 for t in ttl_list]
-    return ttl_list / 3600
+# 从统一配置模块导入
+from .config import (
+    setup_style as _setup_style,
+    COLORS,
+    SCENARIO_COLORS,
+    DEFAULT_COLORS,
+    to_hours as _to_hours,
+    save_figure,
+    get_save_path,
+)
 
 
 def _get_color(scenario_name, index):
@@ -367,15 +338,15 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
     else:
         ax3.axis('off')
     
-    # 构建统计表格
+    # 构建统计表格（使用纯ASCII边框，兼容性更好）
     scenarios = list(comparison_results.keys())
     
     table_text = """
-    ╔═══════════════════════════════════════════════════════════════════════════════╗
-    ║                     📊 场 景 对 比 统 计 表                                   ║
-    ╠══════════════════╦══════════╦══════════╦══════════╦══════════╦════════════════╣
-    ║      场景        ║  均值(h) ║ 标准差(h)║  最小(h) ║  最大(h) ║ 相对基准(%)    ║
-    ╠══════════════════╬══════════╬══════════╬══════════╬══════════╬════════════════╣
+    +===============================================================================+
+    |                    [Compare] 场 景 对 比 统 计 表                            |
+    +==================+===========+==========+==========+==========+==============+
+    |      场景        |  均值(h)  | 标准差(h)|  最小(h) |  最大(h) | 相对基准(%)  |
+    +==================+===========+==========+==========+==========+==============+
 """
     
     # 基准（第一个场景）
@@ -391,9 +362,9 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
         # 根据相对变化添加符号
         rel_str = f"+{relative:.1f}%" if relative > 0 else f"{relative:.1f}%"
         
-        table_text += f"    ║ {s:<16} ║ {mean_h:>8.2f} ║ {std_h:>8.2f} ║ {min_h:>8.2f} ║ {max_h:>8.2f} ║ {rel_str:>14} ║\n"
+        table_text += f"    | {s:<16} | {mean_h:>9.2f} | {std_h:>8.2f} | {min_h:>8.2f} | {max_h:>8.2f} | {rel_str:>12} |\n"
     
-    table_text += """    ╚══════════════════╩══════════╩══════════╩══════════╩══════════╩════════════════╝
+    table_text += """    +==================+===========+==========+==========+==========+==============+
 """
     
     # 添加洞察
@@ -402,22 +373,22 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
     
     insights = f"""
     
-    📈 关键洞察:
+    [Key] 关键洞察:
     
-    • 最佳续航场景: {best_scenario} ({comparison_results[best_scenario]["mean"]/3600:.2f} 小时)
-    • 最差续航场景: {worst_scenario} ({comparison_results[worst_scenario]["mean"]/3600:.2f} 小时)
-    • 最大续航差异: {(comparison_results[best_scenario]["mean"] - comparison_results[worst_scenario]["mean"])/3600:.2f} 小时
+    * 最佳续航场景: {best_scenario} ({comparison_results[best_scenario]["mean"]/3600:.2f} 小时)
+    * 最差续航场景: {worst_scenario} ({comparison_results[worst_scenario]["mean"]/3600:.2f} 小时)
+    * 最大续航差异: {(comparison_results[best_scenario]["mean"] - comparison_results[worst_scenario]["mean"])/3600:.2f} 小时
     """
     
     table_text += insights
     
     target_ax = ax4 if has_timeline else ax3
     target_ax.text(0.05, 0.5, table_text, transform=target_ax.transAxes, fontsize=9,
-                   verticalalignment='center', fontfamily='monospace',
+                   verticalalignment='center',
                    bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
     
     # 总标题
-    fig.suptitle("🔋 使用场景对比分析报告", fontsize=16, fontweight='bold', y=1.02)
+    fig.suptitle("[Scenario] 使用场景对比分析报告", fontsize=16, fontweight='bold', y=1.02)
     
     plt.tight_layout()
     

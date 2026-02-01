@@ -11,39 +11,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Patch
 
-# =====================================================
-# 配色方案
-# =====================================================
-
-COLORS = {
-    "primary": "#2E86AB",
-    "secondary": "#A23B72",
-    "accent": "#F18F01",
-    "success": "#28A745",
-    "danger": "#DC3545",
-    "neutral": "#6C757D",
-}
-
-# 敏感度参数中文标签
-PARAM_LABELS = {
-    "u": "屏幕亮度",
-    "r": "刷新率",
-    "u_cpu": "CPU 利用率",
-    "lambda_cell": "蜂窝网络比例",
-    "delta_signal": "信号质量修正",
-    "r_on": "GPS 开启比例",
-    "r_bg": "后台活跃比例",
-}
-
-
-def _setup_style():
-    """设置全局绘图样式"""
-    plt.style.use('seaborn-v0_8-whitegrid')
-    plt.rcParams['font.size'] = 10
-    plt.rcParams['axes.titlesize'] = 12
-    plt.rcParams['axes.labelsize'] = 10
-    plt.rcParams['figure.titlesize'] = 14
-    plt.rcParams['figure.dpi'] = 100
+# 从统一配置模块导入
+from .config import (
+    setup_style as _setup_style,
+    COLORS,
+    PARAM_LABELS,
+    save_figure,
+    get_save_path,
+)
 
 
 def _get_label(param):
@@ -345,49 +320,50 @@ def plot_sensitivity_comprehensive(sens_results, baseline_ttl, save_path=None):
     positive_sens = [p for p in params if s_norms[p] > 0]
     negative_sens = [p for p in params if s_norms[p] < 0]
     
+    # 使用纯ASCII边框，兼容性更好
     insights_text_parts = [f"""
-    ╔══════════════════════════════════════════════════╗
-    ║           🔬 敏 感 度 分 析 洞 察               ║
-    ╠══════════════════════════════════════════════════╣
-    ║                                                  ║
-    ║  基准续航时间:  {baseline_ttl/3600:>8.2f} 小时                 ║
-    ║                                                  ║
-    ║  ─────────── 关键发现 ───────────                ║
-    ║                                                  ║
-    ║  🔴 最敏感参数:  {_get_label(most_sensitive):<15}             ║
-    ║     敏感度: {s_norms[most_sensitive]:>8.4f}                       ║
-    ║                                                  ║
-    ║  🟢 最不敏感参数: {_get_label(least_sensitive):<15}            ║
-    ║     敏感度: {s_norms[least_sensitive]:>8.4f}                       ║
-    ║                                                  ║
-    ║  ─────────── 参数分类 ───────────                ║
-    ║                                                  ║
-    ║  负敏感度（增加→减少TTL）:                       ║
+    +==================================================+
+    |         [Sens] 敏 感 度 分 析 洞 察              |
+    +==================================================+
+    |                                                  |
+    |  基准续航时间:  {baseline_ttl/3600:>8.2f} 小时                 |
+    |                                                  |
+    |  ----------- 关键发现 -----------                |
+    |                                                  |
+    |  [!] 最敏感参数:  {_get_label(most_sensitive):<15}             |
+    |      敏感度: {s_norms[most_sensitive]:>8.4f}                       |
+    |                                                  |
+    |  [o] 最不敏感参数: {_get_label(least_sensitive):<15}            |
+    |      敏感度: {s_norms[least_sensitive]:>8.4f}                       |
+    |                                                  |
+    |  ----------- 参数分类 -----------                |
+    |                                                  |
+    |  负敏感度（增加->减少TTL）:                       |
     """]
     
     # 使用列表收集字符串，避免循环中字符串拼接
     for p in negative_sens:
-        insights_text_parts.append(f"║    • {_get_label(p):<20} ({s_norms[p]:.4f})      ║\n")
+        insights_text_parts.append(f"|    - {_get_label(p):<20} ({s_norms[p]:.4f})      |\n")
     
-    insights_text_parts.append("""║                                                  ║
-║  正敏感度（增加→增加TTL）:                       ║
+    insights_text_parts.append("""|                                                  |
+|  正敏感度（增加->增加TTL）:                       |
 """)
     
     for p in positive_sens:
-        insights_text_parts.append(f"║    • {_get_label(p):<20} ({s_norms[p]:.4f})      ║\n")
+        insights_text_parts.append(f"|    - {_get_label(p):<20} ({s_norms[p]:.4f})      |\n")
     
-    insights_text_parts.append("""║                                                  ║
-╚══════════════════════════════════════════════════╝
+    insights_text_parts.append("""|                                                  |
++==================================================+
 """)
     
     insights_text = ''.join(insights_text_parts)
     
     ax4.text(0.05, 0.5, insights_text, transform=ax4.transAxes, fontsize=9,
-             verticalalignment='center', fontfamily='monospace',
+             verticalalignment='center',
              bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
     
     # 总标题
-    fig.suptitle("📈 参数敏感度分析综合报告", fontsize=16, fontweight='bold', y=1.02)
+    fig.suptitle("[Sensitivity] 参数敏感度分析综合报告", fontsize=16, fontweight='bold', y=1.02)
     
     plt.tight_layout()
     

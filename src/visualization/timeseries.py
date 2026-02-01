@@ -13,43 +13,15 @@ import matplotlib.patches as mpatches
 import numpy as np
 from matplotlib.gridspec import GridSpec
 
-# =====================================================
-# 全局样式设置
-# =====================================================
-
-# 配色方案（专业科研配色）
-COLORS = {
-    "primary": "#2E86AB",      # 主色调 - 深蓝
-    "secondary": "#A23B72",    # 次色调 - 紫红
-    "accent": "#F18F01",       # 强调色 - 橙色
-    "success": "#C73E1D",      # 警告色 - 红色
-    "neutral": "#6C757D",      # 中性色 - 灰色
-}
-
-# 使用状态配色
-STATE_COLORS = {
-    "DeepIdle": "#4ECDC4",     # 青绿色
-    "Social": "#45B7D1",       # 天蓝色
-    "Video": "#96CEB4",        # 浅绿色
-    "Gaming": "#FF6B6B",       # 珊瑚红
-    "Navigation": "#FFE66D",   # 明黄色
-    "Camera": "#DDA0DD",       # 梅红色
-}
-
-
-def _setup_style():
-    """设置全局绘图样式"""
-    plt.style.use('seaborn-v0_8-whitegrid')
-    plt.rcParams['font.size'] = 10
-    plt.rcParams['axes.titlesize'] = 12
-    plt.rcParams['axes.labelsize'] = 10
-    plt.rcParams['figure.titlesize'] = 14
-    plt.rcParams['figure.dpi'] = 100
-
-
-def _to_hours(time_list):
-    """将秒转换为小时"""
-    return [t / 3600 for t in time_list]
+# 从统一配置模块导入
+from .config import (
+    setup_style as _setup_style,
+    COLORS,
+    STATE_COLORS,
+    to_hours as _to_hours,
+    save_figure,
+    get_save_path,
+)
 
 
 # =====================================================
@@ -332,23 +304,23 @@ def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15):
     avg_temp = np.mean(result["Tb"]) - 273.15
     max_temp = np.max(result["Tb"]) - 273.15
     
-    # 统计文本
+    # 统计文本（使用纯ASCII边框，兼容性更好）
     stats_text = f"""
-    ┌─────────────────────────┐
-    │    仿 真 统 计 摘 要    │
-    ├─────────────────────────┤
-    │  续航时间:  {ttl_hours:>6.2f} h   │
-    │                         │
-    │  平均功耗:  {avg_power:>6.2f} W   │
-    │  最大功耗:  {max_power:>6.2f} W   │
-    │  最小功耗:  {min_power:>6.2f} W   │
-    │                         │
-    │  平均温度:  {avg_temp:>6.1f} °C  │
-    │  最高温度:  {max_temp:>6.1f} °C  │
-    └─────────────────────────┘
+    +-------------------------+
+    |   仿 真 统 计 摘 要     |
+    +-------------------------+
+    |  续航时间:  {ttl_hours:>6.2f} h   |
+    |                         |
+    |  平均功耗:  {avg_power:>6.2f} W   |
+    |  最大功耗:  {max_power:>6.2f} W   |
+    |  最小功耗:  {min_power:>6.2f} W   |
+    |                         |
+    |  平均温度:  {avg_temp:>6.1f} °C  |
+    |  最高温度:  {max_temp:>6.1f} °C  |
+    +-------------------------+
     """
     ax_stats.text(0.1, 0.5, stats_text, transform=ax_stats.transAxes, fontsize=10,
-                  verticalalignment='center', fontfamily='monospace',
+                  verticalalignment='center',
                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
     # ===== 功耗曲线 (中左) =====
@@ -397,7 +369,7 @@ def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15):
     plot_state_timeline(result, ax=ax4, show=False)
     
     # ===== 总标题 =====
-    fig.suptitle(f"📱 电池仿真综合仪表板 | 续航时间: {ttl_hours:.2f} 小时", 
+    fig.suptitle(f"[Battery] 电池仿真综合仪表板 | 续航时间: {ttl_hours:.2f} 小时", 
                  fontsize=16, fontweight='bold', y=0.98)
     
     plt.tight_layout()

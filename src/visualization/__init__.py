@@ -6,6 +6,21 @@
 # - 分布可视化
 # - 敏感度分析可视化
 # - 场景对比可视化
+# - 配置管理（字体、输出目录）
+
+# 导出配置函数
+from .config import (
+    setup_style,
+    set_output_dir,
+    get_output_dir,
+    get_save_path,
+    save_figure,
+    ensure_output_dir,
+    COLORS,
+    STATE_COLORS,
+    SCENARIO_COLORS,
+    PARAM_LABELS,
+)
 
 from .timeseries import (
     plot_single_run,
@@ -39,6 +54,17 @@ from .comparison import (
 )
 
 __all__ = [
+    # 配置
+    "setup_style",
+    "set_output_dir",
+    "get_output_dir",
+    "get_save_path",
+    "save_figure",
+    "ensure_output_dir",
+    "COLORS",
+    "STATE_COLORS",
+    "SCENARIO_COLORS",
+    "PARAM_LABELS",
     # 时间序列
     "plot_single_run",
     "plot_soc_curve",

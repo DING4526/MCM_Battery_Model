@@ -12,32 +12,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
 
-# =====================================================
-# 配色方案
-# =====================================================
-
-COLORS = {
-    "primary": "#2E86AB",
-    "secondary": "#A23B72",
-    "accent": "#F18F01",
-    "success": "#C73E1D",
-    "neutral": "#6C757D",
-}
-
-
-def _setup_style():
-    """设置全局绘图样式"""
-    plt.style.use('seaborn-v0_8-whitegrid')
-    plt.rcParams['font.size'] = 10
-    plt.rcParams['axes.titlesize'] = 12
-    plt.rcParams['axes.labelsize'] = 10
-    plt.rcParams['figure.titlesize'] = 14
-    plt.rcParams['figure.dpi'] = 100
-
-
-def _to_hours(ttl_list):
-    """将秒转换为小时"""
-    return [t / 3600 for t in ttl_list]
+# 从统一配置模块导入
+from .config import (
+    setup_style as _setup_style,
+    COLORS,
+    to_hours as _to_hours,
+    save_figure,
+    get_save_path,
+)
 
 
 # =====================================================
@@ -343,41 +325,42 @@ def plot_ttl_statistical_summary(ttl_list, save_path=None):
     ci_low = mean_val - 1.96 * std_val / np.sqrt(n_samples)
     ci_high = mean_val + 1.96 * std_val / np.sqrt(n_samples)
     
+    # 使用纯ASCII边框，兼容性更好
     stats_text = f"""
-    ╔══════════════════════════════════════════╗
-    ║         📊 统 计 分 析 报 告           ║
-    ╠══════════════════════════════════════════╣
-    ║  样本数量:          {n_samples:>8}              ║
-    ║                                          ║
-    ║  ─────── 中心趋势 ───────                ║
-    ║  均值 (Mean):        {mean_val:>8.3f} h          ║
-    ║  中位数 (Median):    {median_val:>8.3f} h          ║
-    ║  95% 置信区间:  [{ci_low:.3f}, {ci_high:.3f}] h   ║
-    ║                                          ║
-    ║  ─────── 离散程度 ───────                ║
-    ║  标准差 (Std):       {std_val:>8.3f} h          ║
-    ║  变异系数 (CV):      {std_val/mean_val*100:>8.2f} %          ║
-    ║  四分位距 (IQR):     {iqr:>8.3f} h          ║
-    ║                                          ║
-    ║  ─────── 范围 ───────                    ║
-    ║  最小值 (Min):       {min_val:>8.3f} h          ║
-    ║  最大值 (Max):       {max_val:>8.3f} h          ║
-    ║  Q1 (25%):           {q1:>8.3f} h          ║
-    ║  Q3 (75%):           {q3:>8.3f} h          ║
-    ║                                          ║
-    ║  ─────── 分布形态 ───────                ║
-    ║  偏度 (Skewness):    {skewness:>8.3f}            ║
-    ║  峰度 (Kurtosis):    {kurtosis:>8.3f}            ║
-    ║  正态性检验 p值:     {p_value:>8.4f}            ║
-    ╚══════════════════════════════════════════╝
+    +==========================================+
+    |       [Stats] 统 计 分 析 报 告         |
+    +==========================================+
+    |  样本数量:          {n_samples:>8}              |
+    |                                          |
+    |  ------- 中心趋势 -------                |
+    |  均值 (Mean):        {mean_val:>8.3f} h          |
+    |  中位数 (Median):    {median_val:>8.3f} h          |
+    |  95% 置信区间:  [{ci_low:.3f}, {ci_high:.3f}] h   |
+    |                                          |
+    |  ------- 离散程度 -------                |
+    |  标准差 (Std):       {std_val:>8.3f} h          |
+    |  变异系数 (CV):      {std_val/mean_val*100:>8.2f} %          |
+    |  四分位距 (IQR):     {iqr:>8.3f} h          |
+    |                                          |
+    |  ------- 范围 -------                    |
+    |  最小值 (Min):       {min_val:>8.3f} h          |
+    |  最大值 (Max):       {max_val:>8.3f} h          |
+    |  Q1 (25%):           {q1:>8.3f} h          |
+    |  Q3 (75%):           {q3:>8.3f} h          |
+    |                                          |
+    |  ------- 分布形态 -------                |
+    |  偏度 (Skewness):    {skewness:>8.3f}            |
+    |  峰度 (Kurtosis):    {kurtosis:>8.3f}            |
+    |  正态性检验 p值:     {p_value:>8.4f}            |
+    +==========================================+
     """
     
     ax4.text(0.05, 0.5, stats_text, transform=ax4.transAxes, fontsize=10,
-             verticalalignment='center', fontfamily='monospace',
+             verticalalignment='center',
              bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
     
     # 总标题
-    fig.suptitle(f"🔋 Monte Carlo 仿真 TTL 统计分析 (n={n_samples})", 
+    fig.suptitle(f"[MC] Monte Carlo 仿真 TTL 统计分析 (n={n_samples})", 
                  fontsize=14, fontweight='bold', y=1.02)
     
     plt.tight_layout()
