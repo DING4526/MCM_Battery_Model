@@ -73,7 +73,10 @@ def _resolve_ttl_col(df: pd.DataFrame) -> str:
     for col in ("ttl_hours", "TTL_hours"):
         if col in df.columns:
             return col
-    raise ValueError("Missing required TTL column (ttl_hours or TTL_hours).")
+    raise ValueError(
+        "No TTL column found. Expected 'ttl_hours' or 'TTL_hours'. "
+        f"Available columns: {list(df.columns)}."
+    )
 
 
 def _infer_usage_from_ratios(df: pd.DataFrame) -> pd.DataFrame:
@@ -97,11 +100,15 @@ def _infer_usage_from_ratios(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _compute_key_thresholds(ttl: pd.Series, quantiles: tuple[float, ...]) -> list[float]:
-    values = pd.to_numeric(ttl, errors="coerce").dropna().to_numpy()
+def _has_valid_column(df: pd.DataFrame, col: str) -> bool:
+    return col in df.columns and df[col].notna().any()
+
+
+def _compute_quantile_thresholds(lifetime_series: pd.Series, quantile_levels: tuple[float, ...]) -> list[float]:
+    values = pd.to_numeric(lifetime_series, errors="coerce").dropna().to_numpy()
     if values.size == 0:
         return []
-    q = np.asarray(quantiles, dtype=float)
+    q = np.asarray(quantile_levels, dtype=float)
     q = q[(q >= 0.0) & (q <= 1.0)]
     if q.size == 0:
         return []
@@ -109,8 +116,8 @@ def _compute_key_thresholds(ttl: pd.Series, quantiles: tuple[float, ...]) -> lis
     return [float(v) for v in thresholds]
 
 
-def _format_threshold_label(quantiles: tuple[float, ...]) -> str:
-    perc = [int(round(q * 100)) for q in quantiles]
+def _format_threshold_label(quantile_levels: tuple[float, ...]) -> str:
+    perc = [int(q * 100) for q in quantile_levels]
     if not perc:
         return "Key Threshold"
     if len(perc) == 1:
@@ -126,7 +133,7 @@ def main():
         "--quantiles",
         nargs="+",
         type=float,
-        default=(0.10, 0.50),
+        default=[0.1, 0.5],
         help="Quantiles used for key threshold lines (0-1).",
     )
     parser.add_argument("--synthetic", action="store_true", help="Use synthetic demo data.")
@@ -142,38 +149,80 @@ def main():
         df = _make_synthetic()
         ttl_col = "ttl_hours"
 
-    quantiles = tuple(args.quantiles)
-    thresholds = _compute_key_thresholds(df[ttl_col], quantiles)
-    threshold_label = _format_threshold_label(quantiles)
+    device_age_col = "device_age_months"
+    usage_state_col = "usage_dominant_state"
+    has_device_age = _has_valid_column(df, device_age_col)
+    has_usage_state = _has_valid_column(df, usage_state_col)
+
+    quantile_levels = tuple(args.quantiles)
+    thresholds = _compute_quantile_thresholds(df[ttl_col], quantile_levels)
+    threshold_label = _format_threshold_label(quantile_levels)
 
     cfg = LifetimePlotConfig(
         ttl_col=ttl_col,
-        device_age_col="device_age_months",
-        usage_state_col="usage_dominant_state",
+        device_age_col=device_age_col,
+        usage_state_col=usage_state_col,
         figsize=(6.6, 4.4),
         max_levels_usage=8,
-        vlines_hours=thresholds or None,
+        vlines_hours=thresholds if thresholds else None,
         vlines_label=threshold_label,
     )
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    plot_population_lifetime_distribution(df, kind="kde", stratify="none", cfg=cfg,
-                                          save_path=str(out / "lifetime_kde_overall.pdf"), show=False)
-    plot_population_lifetime_distribution(df, kind="ecdf", stratify="none", cfg=cfg,
-                                          save_path=str(out / "lifetime_ecdf_overall.pdf"), show=False)
+    plot_population_lifetime_distribution(
+        df,
+        kind="kde",
+        stratify="none",
+        cfg=cfg,
+        save_path=str(out / "lifetime_kde_overall.pdf"),
+        show=False,
+    )
+    plot_population_lifetime_distribution(
+        df,
+        kind="ecdf",
+        stratify="none",
+        cfg=cfg,
+        save_path=str(out / "lifetime_ecdf_overall.pdf"),
+        show=False,
+    )
 
-    plot_population_lifetime_distribution(df, kind="kde", stratify="device_age_months", cfg=cfg,
-                                          save_path=str(out / "lifetime_kde_by_age.pdf"), show=False)
-    plot_population_lifetime_distribution(df, kind="ecdf", stratify="device_age_months", cfg=cfg,
-                                          save_path=str(out / "lifetime_ecdf_by_age.pdf"), show=False)
+    if has_device_age:
+        plot_population_lifetime_distribution(
+            df,
+            kind="kde",
+            stratify=cfg.device_age_col,
+            cfg=cfg,
+            save_path=str(out / "lifetime_kde_by_age.pdf"),
+            show=False,
+        )
+        plot_population_lifetime_distribution(
+            df,
+            kind="ecdf",
+            stratify=cfg.device_age_col,
+            cfg=cfg,
+            save_path=str(out / "lifetime_ecdf_by_age.pdf"),
+            show=False,
+        )
 
-    if cfg.usage_state_col in df.columns:
-        plot_population_lifetime_distribution(df, kind="kde", stratify="usage_dominant_state", cfg=cfg,
-                                              save_path=str(out / "lifetime_kde_by_usage.pdf"), show=False)
-        plot_population_lifetime_distribution(df, kind="ecdf", stratify="usage_dominant_state", cfg=cfg,
-                                              save_path=str(out / "lifetime_ecdf_by_usage.pdf"), show=False)
+    if has_usage_state:
+        plot_population_lifetime_distribution(
+            df,
+            kind="kde",
+            stratify=cfg.usage_state_col,
+            cfg=cfg,
+            save_path=str(out / "lifetime_kde_by_usage.pdf"),
+            show=False,
+        )
+        plot_population_lifetime_distribution(
+            df,
+            kind="ecdf",
+            stratify=cfg.usage_state_col,
+            cfg=cfg,
+            save_path=str(out / "lifetime_ecdf_by_usage.pdf"),
+            show=False,
+        )
 
     print(f"Saved figures to: {out.resolve()}")
 
