@@ -1,11 +1,11 @@
 # visualization/comparison.py
-# 场景对比可视化模块（Plotly 版本 - 单栏论文优化）
+# Scenario Comparison Visualization Module (Plotly - Single Column Paper Optimized)
 #
-# 提供专业的场景对比可视化：
-# - 场景对比柱状图
-# - 多场景箱线图
-# - 雷达图
-# - 多场景时间线对比
+# Professional scenario comparison visualizations:
+# - Scenario Comparison Bar Chart
+# - Multi-Scenario Box Plot
+# - Radar Chart
+# - Multi-Scenario Timeline Comparison
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -30,13 +30,13 @@ def _get_color(scenario_name, index):
 
 
 # =====================================================
-# 场景对比柱状图
+# Scenario Comparison Bar Chart
 # =====================================================
 
 def plot_scenario_comparison(comparison_results, filename=None, subdir="", ax=None,
                               show=None, save_path=None, error_bars=True):
     """
-    绘制场景对比柱状图
+    Plot scenario comparison bar chart
     """
     scenarios = list(comparison_results.keys())
     values = [comparison_results[s]["mean"] / 3600 for s in scenarios]
@@ -58,9 +58,9 @@ def plot_scenario_comparison(comparison_results, filename=None, subdir="", ax=No
     
     width, height = FIGURE_SIZES["default"]
     fig.update_layout(
-        title=dict(text="使用场景续航时间对比", font=dict(size=FONT_SIZES["title"])),
-        xaxis_title="使用场景",
-        yaxis_title="平均续航时间 (小时)",
+        title=dict(text="Usage Scenario TTL Comparison", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Usage Scenario",
+        yaxis_title="Average TTL (hours)",
         xaxis=dict(tickangle=-15),
         width=width,
         height=height,
@@ -80,12 +80,12 @@ def plot_scenario_comparison(comparison_results, filename=None, subdir="", ax=No
 
 
 # =====================================================
-# 多场景箱线图
+# Multi-Scenario Box Plot
 # =====================================================
 
 def plot_scenario_boxplot(comparison_results, ax=None, show=True, save_path=None):
     """
-    绘制多场景箱线图对比
+    Plot multi-scenario box plot comparison
     """
     scenarios = list(comparison_results.keys())
     
@@ -104,21 +104,21 @@ def plot_scenario_boxplot(comparison_results, ax=None, show=True, save_path=None
             line=dict(color=color, width=LINE_WIDTHS["main"]),
         ))
     
-    # 均值标记
+    # Mean markers
     means = [np.mean(to_hours(comparison_results[s]["ttl_list"])) for s in scenarios]
     fig.add_trace(go.Scatter(
         x=scenarios,
         y=means,
         mode='markers',
-        name='均值',
+        name='Mean',
         marker=dict(color=COLORS["danger"], size=8, symbol='diamond',
                    line=dict(color='white', width=1)),
     ))
     
     width, height = FIGURE_SIZES["default"]
     fig.update_layout(
-        title=dict(text="使用场景 TTL 分布对比", font=dict(size=FONT_SIZES["title"])),
-        yaxis_title="续航时间 TTL (小时)",
+        title=dict(text="Usage Scenario TTL Distribution", font=dict(size=FONT_SIZES["title"])),
+        yaxis_title="Time-to-Live TTL (hours)",
         xaxis=dict(tickangle=-15),
         width=width,
         height=height,
@@ -136,12 +136,12 @@ def plot_scenario_boxplot(comparison_results, ax=None, show=True, save_path=None
 
 
 # =====================================================
-# 场景雷达图
+# Scenario Radar Chart
 # =====================================================
 
 def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, save_path=None):
     """
-    绘制场景对比雷达图
+    Plot scenario comparison radar chart
     """
     scenarios = list(comparison_results.keys())
     
@@ -149,11 +149,11 @@ def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, sa
         metrics = ["mean", "std", "min", "max", "median"]
     
     metric_labels = {
-        "mean": "均值", "std": "标准差", "min": "最小值",
-        "max": "最大值", "median": "中位数"
+        "mean": "Mean", "std": "Std Dev", "min": "Min",
+        "max": "Max", "median": "Median"
     }
     
-    # 准备数据
+    # Prepare data
     data = {}
     for s in scenarios:
         ttl_h = to_hours(comparison_results[s]["ttl_list"])
@@ -165,7 +165,7 @@ def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, sa
             "median": np.median(ttl_h)
         }
     
-    # 归一化
+    # Normalize
     normalized = {}
     for m in metrics:
         vals = [data[s][m] for s in scenarios]
@@ -197,7 +197,7 @@ def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, sa
     
     width, height = FIGURE_SIZES["square"]
     fig.update_layout(
-        title=dict(text="场景多维度对比雷达图", font=dict(size=FONT_SIZES["title"])),
+        title=dict(text="Scenario Multi-Dimensional Comparison", font=dict(size=FONT_SIZES["title"])),
         polar=dict(
             radialaxis=dict(visible=True, tickfont=dict(size=FONT_SIZES["axis_tick"])),
             angularaxis=dict(tickfont=dict(size=FONT_SIZES["axis_tick"])),
@@ -221,12 +221,12 @@ def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, sa
 
 
 # =====================================================
-# 多场景时间线对比
+# Multi-Scenario Timeline Comparison
 # =====================================================
 
 def plot_multi_scenario_timeline(results_dict, ax=None, show=True, save_path=None):
     """
-    绘制多场景时间线对比
+    Plot multi-scenario timeline comparison
     """
     scenarios = list(results_dict.keys())
     
@@ -243,10 +243,10 @@ def plot_multi_scenario_timeline(results_dict, ax=None, show=True, save_path=Non
             mode='lines',
             name=scenario,
             line=dict(color=color, width=LINE_WIDTHS["main"]),
-            hovertemplate=f'{scenario}<br>时间: %{{x:.2f}} h<br>SOC: %{{y:.1f}}%<extra></extra>'
+            hovertemplate=f'{scenario}<br>Time: %{{x:.2f}} h<br>SOC: %{{y:.1f}}%<extra></extra>'
         ))
     
-    # 关键电量线
+    # Critical battery lines
     fig.add_hline(y=20, line_dash="dash", line_color=COLORS["warning"],
                   line_width=1, opacity=0.5)
     fig.add_hline(y=5, line_dash="dash", line_color=COLORS["danger"],
@@ -254,9 +254,9 @@ def plot_multi_scenario_timeline(results_dict, ax=None, show=True, save_path=Non
     
     width, height = FIGURE_SIZES["wide"]
     fig.update_layout(
-        title=dict(text="多场景 SOC 变化曲线对比", font=dict(size=FONT_SIZES["title"])),
-        xaxis_title="时间 (小时)",
-        yaxis_title="电量 SOC (%)",
+        title=dict(text="Multi-Scenario SOC Comparison", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
+        yaxis_title="State of Charge (%)",
         yaxis=dict(range=[0, 105]),
         width=width,
         height=height + 50,
@@ -278,13 +278,13 @@ def plot_multi_scenario_timeline(results_dict, ax=None, show=True, save_path=Non
 
 
 # =====================================================
-# 场景综合对比
+# Comprehensive Scenario Comparison
 # =====================================================
 
 def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None,
                                             filename=None, subdir="", save_path=None, show=None):
     """
-    绘制场景对比综合图表
+    Plot comprehensive scenario comparison chart
     """
     scenarios = list(comparison_results.keys())
     has_timeline = results_dict is not None
@@ -292,7 +292,7 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
     if has_timeline:
         fig = make_subplots(
             rows=2, cols=2,
-            subplot_titles=("场景对比柱状图", "TTL 分布箱线图", "SOC 时间线对比", "统计分析"),
+            subplot_titles=("Scenario Comparison", "TTL Distribution", "SOC Timeline", "Statistics"),
             specs=[
                 [{"type": "xy"}, {"type": "xy"}],
                 [{"type": "xy"}, {"type": "table"}],
@@ -303,7 +303,7 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
     else:
         fig = make_subplots(
             rows=2, cols=2,
-            subplot_titles=("场景对比柱状图", "TTL 分布箱线图", "统计分析", ""),
+            subplot_titles=("Scenario Comparison", "TTL Distribution", "Statistics", ""),
             specs=[
                 [{"type": "xy"}, {"type": "xy"}],
                 [{"type": "table", "colspan": 2}, None],
@@ -312,7 +312,7 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
             horizontal_spacing=0.1,
         )
     
-    # 1. 柱状图
+    # 1. Bar chart
     values = [comparison_results[s]["mean"] / 3600 for s in scenarios]
     errors = [comparison_results[s]["std"] / 3600 for s in scenarios]
     colors = [_get_color(s, i) for i, s in enumerate(scenarios)]
@@ -326,7 +326,7 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
         showlegend=False,
     ), row=1, col=1)
     
-    # 2. 箱线图
+    # 2. Box plot
     for i, s in enumerate(scenarios):
         ttl_h = to_hours(comparison_results[s]["ttl_list"])
         color = _get_color(s, i)
@@ -339,7 +339,7 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
         ), row=1, col=2)
     
     if has_timeline:
-        # 3. 时间线对比
+        # 3. Timeline comparison
         for i, (scenario, result) in enumerate(results_dict.items()):
             time_h = to_hours(result["time"])
             soc_percent = [s * 100 for s in result["SOC"]]
@@ -356,7 +356,7 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
     else:
         table_row, table_col = 2, 1
     
-    # 统计表格
+    # Statistics table
     baseline_mean = comparison_results[scenarios[0]]["mean"]
     
     table_scenarios = []
@@ -377,7 +377,7 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
     
     fig.add_trace(go.Table(
         header=dict(
-            values=["<b>场景</b>", "<b>均值(h)</b>", "<b>标准差</b>", "<b>最小</b>", "<b>最大</b>", "<b>相对基准</b>"],
+            values=["<b>Scenario</b>", "<b>Mean(h)</b>", "<b>Std</b>", "<b>Min</b>", "<b>Max</b>", "<b>vs Baseline</b>"],
             fill_color=COLORS["accent"],
             font=dict(color='white', size=FONT_SIZES["axis_tick"]),
             align='center', height=24,
@@ -390,18 +390,18 @@ def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None
         )
     ), row=table_row, col=table_col)
     
-    # 布局
+    # Layout
     fig.update_xaxes(tickangle=-15, row=1, col=1)
     fig.update_yaxes(title_text="TTL (h)", row=1, col=1)
     fig.update_yaxes(title_text="TTL (h)", row=1, col=2)
     
     if has_timeline:
-        fig.update_xaxes(title_text="时间 (h)", row=2, col=1)
+        fig.update_xaxes(title_text="Time (h)", row=2, col=1)
         fig.update_yaxes(title_text="SOC (%)", range=[0, 105], row=2, col=1)
     
     width, height = FIGURE_SIZES["composite"]
     fig.update_layout(
-        title=dict(text="使用场景对比分析报告", font=dict(size=FONT_SIZES["title"])),
+        title=dict(text="Usage Scenario Comparison Report", font=dict(size=FONT_SIZES["title"])),
         width=width + 100,
         height=height,
         legend=dict(

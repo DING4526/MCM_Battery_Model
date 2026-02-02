@@ -1,12 +1,12 @@
 # visualization/timeseries.py
-# 时间序列可视化模块（Plotly 版本 - 单栏论文优化）
+# Time Series Visualization Module (Plotly - Single Column Paper Optimized)
 #
-# 提供专业的时间序列可视化：
-# - SOC 曲线
-# - 功耗曲线
-# - 温度曲线
-# - 使用状态时间线
-# - 复合图表
+# Professional time series visualizations:
+# - SOC Curve
+# - Power Curve
+# - Temperature Curve
+# - Usage State Timeline
+# - Composite Charts
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -30,15 +30,15 @@ setup_style()
 
 def plot_soc_curve(result, ax=None, show=True, save_path=None):
     """
-    绘制 SOC（电量）随时间变化曲线
+    Plot SOC (State of Charge) over time
     
-    参数：
-        result : dict - 仿真结果
-        ax : 兼容参数（忽略）
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
+    Parameters:
+        result : dict - Simulation result
+        ax : Compatibility parameter (ignored)
+        show : bool - Whether to display the figure
+        save_path : str - Save path
     
-    返回：
+    Returns:
         plotly.graph_objects.Figure
     """
     time_h = to_hours(result["time"])
@@ -46,42 +46,42 @@ def plot_soc_curve(result, ax=None, show=True, save_path=None):
     
     fig = go.Figure()
     
-    # 主 SOC 曲线
+    # Main SOC curve
     fig.add_trace(go.Scatter(
         x=time_h,
         y=soc_percent,
         mode='lines',
-        name='电池电量',
+        name='Battery SOC',
         line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
         fill='tozeroy',
-        fillcolor='rgba(41, 128, 185, 0.15)',
-        hovertemplate='时间: %{x:.2f} h<br>SOC: %{y:.1f}%<extra></extra>'
+        fillcolor='rgba(8, 145, 178, 0.15)',
+        hovertemplate='Time: %{x:.2f} h<br>SOC: %{y:.1f}%<extra></extra>'
     ))
     
-    # 低电量警告线
+    # Low battery warning line
     fig.add_hline(
         y=20, line_dash="dash", line_color=COLORS["warning"],
         line_width=LINE_WIDTHS["secondary"],
-        annotation_text="低电量 (20%)",
+        annotation_text="Low Battery (20%)",
         annotation_position="top right",
         annotation_font_size=FONT_SIZES["annotation"],
     )
     
-    # 极低电量警告线
+    # Critical battery warning line
     fig.add_hline(
         y=5, line_dash="dot", line_color=COLORS["danger"],
         line_width=LINE_WIDTHS["secondary"],
-        annotation_text="极低电量 (5%)",
+        annotation_text="Critical (5%)",
         annotation_position="bottom right",
         annotation_font_size=FONT_SIZES["annotation"],
     )
     
-    # 布局
+    # Layout
     width, height = FIGURE_SIZES["wide"]
     fig.update_layout(
-        title=dict(text="电池电量变化曲线", font=dict(size=FONT_SIZES["title"])),
-        xaxis_title="时间 (小时)",
-        yaxis_title="电量 SOC (%)",
+        title=dict(text="Battery SOC Over Time", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
+        yaxis_title="State of Charge (%)",
         yaxis=dict(range=[0, 105]),
         xaxis=dict(range=[0, max(time_h)]),
         width=width,
@@ -90,11 +90,11 @@ def plot_soc_curve(result, ax=None, show=True, save_path=None):
         margin=dict(l=50, r=20, t=45, b=45),
     )
     
-    # 添加续航时间标注
+    # Add TTL annotation
     ttl_hours = result["TTL"] / 3600
     fig.add_annotation(
         x=0.98, y=0.95, xref="paper", yref="paper",
-        text=f"<b>续航: {ttl_hours:.2f} h</b>",
+        text=f"<b>TTL: {ttl_hours:.2f} h</b>",
         showarrow=False,
         font=dict(size=FONT_SIZES["annotation"]),
         bgcolor="rgba(255,255,255,0.9)",
@@ -119,12 +119,12 @@ def plot_soc_curve(result, ax=None, show=True, save_path=None):
 
 def plot_power_curve(result, ax=None, show=True, save_path=None):
     """
-    绘制功耗随时间变化曲线
+    Plot power consumption over time
     """
     time_h = to_hours(result["time"])
     power = np.array(result["Power"])
     
-    # 计算滑动平均
+    # Calculate moving average
     window_size = min(100, len(power) // 10) if len(power) > 100 else 1
     if window_size > 1:
         power_smooth = np.convolve(power, np.ones(window_size)/window_size, mode='valid')
@@ -135,42 +135,42 @@ def plot_power_curve(result, ax=None, show=True, save_path=None):
     
     fig = go.Figure()
     
-    # 瞬时功耗（半透明）
+    # Instantaneous power (semi-transparent)
     fig.add_trace(go.Scatter(
         x=time_h,
         y=power,
         mode='lines',
-        name='瞬时功耗',
+        name='Instantaneous',
         line=dict(color=COLORS["neutral"], width=0.5),
         opacity=0.3,
         hoverinfo='skip',
     ))
     
-    # 平滑功耗曲线
+    # Smoothed power curve
     fig.add_trace(go.Scatter(
         x=time_smooth,
         y=power_smooth,
         mode='lines',
-        name='平滑功耗',
+        name='Smoothed',
         line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
-        hovertemplate='时间: %{x:.2f} h<br>功耗: %{y:.3f} W<extra></extra>'
+        hovertemplate='Time: %{x:.2f} h<br>Power: %{y:.3f} W<extra></extra>'
     ))
     
-    # 平均功耗线
+    # Average power line
     avg_power = np.mean(power)
     fig.add_hline(
         y=avg_power, line_dash="dash", line_color=COLORS["accent"],
         line_width=LINE_WIDTHS["secondary"],
-        annotation_text=f"平均: {avg_power:.2f} W",
+        annotation_text=f"Avg: {avg_power:.2f} W",
         annotation_position="top right",
         annotation_font_size=FONT_SIZES["annotation"],
     )
     
     width, height = FIGURE_SIZES["wide"]
     fig.update_layout(
-        title=dict(text="系统功耗变化曲线", font=dict(size=FONT_SIZES["title"])),
-        xaxis_title="时间 (小时)",
-        yaxis_title="功耗 (W)",
+        title=dict(text="System Power Consumption", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
+        yaxis_title="Power (W)",
         xaxis=dict(range=[0, max(time_h)]),
         width=width,
         height=height,
@@ -193,7 +193,7 @@ def plot_power_curve(result, ax=None, show=True, save_path=None):
 
 def plot_temperature_curve(result, ax=None, show=True, save_path=None, T_amb=298.15):
     """
-    绘制温度随时间变化曲线
+    Plot battery temperature over time
     """
     time_h = to_hours(result["time"])
     temp_c = [tb - 273.15 for tb in result["Tb"]]
@@ -201,41 +201,41 @@ def plot_temperature_curve(result, ax=None, show=True, save_path=None, T_amb=298
     
     fig = go.Figure()
     
-    # 温度曲线
+    # Temperature curve
     fig.add_trace(go.Scatter(
         x=time_h,
         y=temp_c,
         mode='lines',
-        name='电池温度',
+        name='Battery Temp',
         line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
         fill='tonexty',
-        fillcolor='rgba(192, 57, 43, 0.12)',
-        hovertemplate='时间: %{x:.2f} h<br>温度: %{y:.1f}°C<extra></extra>'
+        fillcolor='rgba(220, 38, 38, 0.12)',
+        hovertemplate='Time: %{x:.2f} h<br>Temp: %{y:.1f}°C<extra></extra>'
     ))
     
-    # 环境温度参考线
+    # Ambient temperature reference line
     fig.add_hline(
         y=T_amb_c, line_dash="dash", line_color=COLORS["neutral"],
         line_width=LINE_WIDTHS["secondary"],
-        annotation_text=f"环境: {T_amb_c:.1f}°C",
+        annotation_text=f"Ambient: {T_amb_c:.1f}°C",
         annotation_position="bottom right",
         annotation_font_size=FONT_SIZES["annotation"],
     )
     
-    # 高温警告线
+    # High temperature warning line
     fig.add_hline(
         y=45, line_dash="dot", line_color=COLORS["danger"],
         line_width=LINE_WIDTHS["secondary"],
-        annotation_text="高温警告 (45°C)",
+        annotation_text="Warning (45°C)",
         annotation_position="top right",
         annotation_font_size=FONT_SIZES["annotation"],
     )
     
     width, height = FIGURE_SIZES["wide"]
     fig.update_layout(
-        title=dict(text="电池温度变化曲线", font=dict(size=FONT_SIZES["title"])),
-        xaxis_title="时间 (小时)",
-        yaxis_title="温度 (°C)",
+        title=dict(text="Battery Temperature Over Time", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
+        yaxis_title="Temperature (°C)",
         xaxis=dict(range=[0, max(time_h)]),
         width=width,
         height=height,
@@ -258,12 +258,12 @@ def plot_temperature_curve(result, ax=None, show=True, save_path=None, T_amb=298
 
 def plot_state_timeline(result, ax=None, show=True, save_path=None):
     """
-    绘制使用状态时间线图
+    Plot usage state timeline
     """
     time_h = to_hours(result["time"])
     states = result["State"]
     
-    # 保持状态出现顺序
+    # Preserve state appearance order
     unique_states = []
     for s in states:
         if s not in unique_states:
@@ -271,7 +271,7 @@ def plot_state_timeline(result, ax=None, show=True, save_path=None):
     
     fig = go.Figure()
     
-    # 绘制每个状态的时间段
+    # Plot state segments
     prev_state = states[0]
     start_time = time_h[0]
     state_spans = []
@@ -284,7 +284,7 @@ def plot_state_timeline(result, ax=None, show=True, save_path=None):
             start_time = t
             prev_state = state
     
-    # 绘制色块
+    # Draw color blocks
     for state, start_t, end_t in state_spans:
         color = STATE_COLORS.get(state, COLORS["neutral"])
         fig.add_shape(
@@ -295,7 +295,7 @@ def plot_state_timeline(result, ax=None, show=True, save_path=None):
             line_width=0,
         )
     
-    # 添加图例
+    # Add legend
     for state in unique_states:
         color = STATE_COLORS.get(state, COLORS["neutral"])
         fig.add_trace(go.Scatter(
@@ -308,8 +308,8 @@ def plot_state_timeline(result, ax=None, show=True, save_path=None):
     
     width, height = FIGURE_SIZES["timeline"]
     fig.update_layout(
-        title=dict(text="使用状态时间线", font=dict(size=FONT_SIZES["title"])),
-        xaxis_title="时间 (小时)",
+        title=dict(text="Usage State Timeline", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
         xaxis=dict(range=[0, max(time_h)]),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
         width=width,
@@ -340,11 +340,11 @@ def plot_state_timeline(result, ax=None, show=True, save_path=None):
 
 def plot_single_run(result, filename=None, subdir="", save_path=None, show=None):
     """
-    绘制单次仿真的基础图表（SOC + 功耗）
+    Plot basic charts for a single simulation run (SOC + Power)
     """
     fig = make_subplots(
         rows=2, cols=1,
-        subplot_titles=("电池电量 (SOC)", "系统功耗"),
+        subplot_titles=("Battery SOC", "System Power"),
         vertical_spacing=0.12,
     )
     
@@ -352,20 +352,20 @@ def plot_single_run(result, filename=None, subdir="", save_path=None, show=None)
     soc_percent = [s * 100 for s in result["SOC"]]
     power = np.array(result["Power"])
     
-    # SOC 曲线
+    # SOC curve
     fig.add_trace(go.Scatter(
         x=time_h, y=soc_percent,
         mode='lines', name='SOC',
         line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
         fill='tozeroy',
-        fillcolor='rgba(41, 128, 185, 0.15)',
+        fillcolor='rgba(8, 145, 178, 0.15)',
         showlegend=False,
     ), row=1, col=1)
     
     fig.add_hline(y=20, line_dash="dash", line_color=COLORS["warning"],
                   line_width=1, row=1, col=1)
     
-    # 功耗曲线（平滑）
+    # Power curve (smoothed)
     window_size = min(100, len(power) // 10) if len(power) > 100 else 1
     if window_size > 1:
         power_smooth = np.convolve(power, np.ones(window_size)/window_size, mode='valid')
@@ -376,7 +376,7 @@ def plot_single_run(result, filename=None, subdir="", save_path=None, show=None)
     
     fig.add_trace(go.Scatter(
         x=time_smooth, y=power_smooth,
-        mode='lines', name='功耗',
+        mode='lines', name='Power',
         line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
         showlegend=False,
     ), row=2, col=1)
@@ -385,13 +385,13 @@ def plot_single_run(result, filename=None, subdir="", save_path=None, show=None)
     fig.add_hline(y=avg_power, line_dash="dash", line_color=COLORS["accent"],
                   line_width=1, row=2, col=1)
     
-    # 更新布局
+    # Update layout
     ttl_hours = result["TTL"] / 3600
     width, height = FIGURE_SIZES["tall"]
     
     fig.update_layout(
         title=dict(
-            text=f"电池仿真结果 | 续航时间: {ttl_hours:.2f} 小时",
+            text=f"Battery Simulation Results | TTL: {ttl_hours:.2f} hours",
             font=dict(size=FONT_SIZES["title"]),
         ),
         width=width,
@@ -399,9 +399,9 @@ def plot_single_run(result, filename=None, subdir="", save_path=None, show=None)
         margin=dict(l=50, r=20, t=60, b=45),
     )
     
-    fig.update_xaxes(title_text="时间 (小时)", row=2, col=1)
+    fig.update_xaxes(title_text="Time (hours)", row=2, col=1)
     fig.update_yaxes(title_text="SOC (%)", range=[0, 105], row=1, col=1)
-    fig.update_yaxes(title_text="功耗 (W)", row=2, col=1)
+    fig.update_yaxes(title_text="Power (W)", row=2, col=1)
     
     path = filename or save_path
     if path:
@@ -416,34 +416,34 @@ def plot_single_run(result, filename=None, subdir="", save_path=None, show=None)
 
 
 # =====================================================
-# 综合仪表板（保留接口，但简化为多图）
+# Comprehensive Dashboard (Interface compatibility)
 # =====================================================
 
 def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15, show=None):
     """
-    绘制综合图表（多个独立子图）
-    保留接口兼容性，实际绘制多个分离图表
+    Plot comprehensive charts (multiple independent subplots)
+    Maintains interface compatibility, actually plots multiple separate charts
     """
-    # 直接调用 plot_single_run
+    # Directly call plot_single_run
     return plot_single_run(result, save_path=save_path, show=show)
 
 
 # =====================================================
-# 复合图表：系统分析图（温度 + 功耗分解 + 状态时间线）
-# 设计理念：紧凑、整体化、论文级系统分析导向
+# Composite Chart: System Analysis (Temperature + Power Breakdown + State Timeline)
+# Design philosophy: Compact, integrated, paper-quality system analysis
 # =====================================================
 
 def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=None):
     """
-    绘制系统分析复合图：温度 + 功耗分解 + 状态时间线
+    Plot system analysis composite chart: Temperature + Power Breakdown + State Timeline
     
-    设计特点：
-    - 共享时间轴，紧凑纵向布局
-    - 温度图：折线+轻填充+阈值线
-    - 功耗图：堆叠面积+边界线区分
-    - 状态图：纯色块，最低认知负担
-    - 图例分布在各自子图区域
-    - 深沉低饱和配色
+    Design features:
+    - Shared time axis, compact vertical layout
+    - Temperature chart: line + light fill + threshold lines
+    - Power chart: stacked area + boundary lines
+    - State chart: pure color blocks, minimal cognitive load
+    - Legends distributed in respective subplot areas
+    - Bright, high-contrast color scheme
     """
     time_h = np.array(to_hours(result["time"]))
     temp_c = np.array([tb - 273.15 for tb in result["Tb"]])
@@ -452,7 +452,7 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
     ttl_hours = result["TTL"] / 3600
     max_time = max(time_h)
     
-    # 创建紧凑子图布局（压缩纵向比例）
+    # Create compact subplot layout
     fig = make_subplots(
         rows=3, cols=1,
         row_heights=[0.38, 0.48, 0.14],
@@ -460,9 +460,9 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         shared_xaxes=True,
     )
     
-    # ========== 1. 温度曲线（折线+轻填充+阈值线） ==========
+    # ========== 1. Temperature Curve (line + light fill + threshold) ==========
     
-    # 环境温度参考线填充（极淡）
+    # Ambient temperature reference fill (very light)
     fig.add_trace(go.Scatter(
         x=time_h, y=[T_amb_c] * len(time_h),
         mode='lines', name='',
@@ -471,35 +471,35 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         hoverinfo='skip',
     ), row=1, col=1)
     
-    # 电池温度曲线（带轻填充到环境温度）
+    # Battery temperature curve (with light fill to ambient)
     fig.add_trace(go.Scatter(
         x=time_h, y=temp_c,
-        mode='lines', name='电池温度',
+        mode='lines', name='Battery Temp',
         line=dict(color=COLORS["secondary"], width=2.0),
         fill='tonexty',
-        fillcolor=hex_to_rgba(COLORS["secondary"], 0.08),
+        fillcolor=hex_to_rgba(COLORS["secondary"], 0.12),
         showlegend=False,
     ), row=1, col=1)
     
-    # 环境温度参考线（虚线）
+    # Ambient temperature reference line (dashed)
     fig.add_hline(
         y=T_amb_c, line_dash="dash", line_color=COLORS["neutral"],
         line_width=1.0, row=1, col=1,
     )
-    # 环境温度标注（动态偏移）
+    # Ambient temperature annotation (dynamic offset)
     temp_range = max(temp_c) - min(temp_c) if max(temp_c) > min(temp_c) else 5
     annotation_offset = max(temp_range * 0.05, 0.5)
     fig.add_trace(go.Scatter(
         x=[max_time * 0.03], y=[T_amb_c + annotation_offset],
         mode='text',
-        text=[f'环境 {T_amb_c:.0f}°C'],
+        text=[f'Ambient {T_amb_c:.0f}°C'],
         textfont=dict(size=7, color=COLORS["neutral"]),
         textposition='middle right',
         showlegend=False,
         hoverinfo='skip',
     ), row=1, col=1)
     
-    # 高温警戒线（45°C）
+    # High temperature warning line (45°C)
     TEMP_THRESHOLD = 45
     if max(temp_c) > 40:
         fig.add_hline(
@@ -509,34 +509,34 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         fig.add_trace(go.Scatter(
             x=[max_time * 0.03], y=[TEMP_THRESHOLD + annotation_offset],
             mode='text',
-            text=[f'警戒 {TEMP_THRESHOLD}°C'],
+            text=[f'Warning {TEMP_THRESHOLD}°C'],
             textfont=dict(size=7, color=COLORS["danger"]),
             textposition='middle right',
             showlegend=False,
             hoverinfo='skip',
         ), row=1, col=1)
     
-    # ========== 2. 功耗分解图（堆叠面积+边界线区分） ==========
+    # ========== 2. Power Breakdown (stacked area + boundary lines) ==========
     
     has_breakdown = "Power_screen" in result
     
     if has_breakdown:
-        # 堆叠顺序：从底部到顶部
+        # Stack order: bottom to top
         layers = [
-            ("后台", result["Power_background"]),
+            ("Background", result["Power_background"]),
             ("GPS", result["Power_gps"]),
-            ("无线通信", result["Power_radio"]),
+            ("Radio", result["Power_radio"]),
             ("CPU", result["Power_cpu"]),
-            ("屏幕", result["Power_screen"]),
+            ("Screen", result["Power_screen"]),
         ]
         
-        # 线型样式（通过边界线区分，而非仅颜色）
+        # Line styles (differentiate by boundary lines, not just color)
         line_styles = {
-            "后台": dict(width=0.8, color="#3A3A4A", dash="dot"),
-            "GPS": dict(width=0.8, color="#5A4B3A"),
-            "无线通信": dict(width=0.8, color="#3A4B5A"),
-            "CPU": dict(width=0.8, color="#3A5B4C"),
-            "屏幕": dict(width=1.0, color="#4B5B6C"),
+            "Background": dict(width=0.8, color="#7C3AED", dash="dot"),
+            "GPS": dict(width=0.8, color="#EA580C"),
+            "Radio": dict(width=0.8, color="#D97706"),
+            "CPU": dict(width=0.8, color="#059669"),
+            "Screen": dict(width=1.0, color="#2563EB"),
         }
         
         for name, data in layers:
@@ -557,14 +557,14 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         avg_power = np.mean(total_power)
         max_power = np.max(total_power)
         
-        # 功耗模块图例位置配置
+        # Power module legend position configuration
         LEGEND_START_Y = 0.92
         LEGEND_SPACING = 0.12
         LEGEND_X_POS = 0.88
         
-        layer_names = ["屏幕", "CPU", "通信", "GPS", "后台"]
-        for i, name in enumerate(layer_names):
-            full_name = "无线通信" if name == "通信" else name
+        layer_names = ["Screen", "CPU", "Radio", "GPS", "Bkgnd"]
+        layer_full = ["Screen", "CPU", "Radio", "GPS", "Background"]
+        for i, (name, full_name) in enumerate(zip(layer_names, layer_full)):
             y_pos = max_power * (LEGEND_START_Y - i * LEGEND_SPACING)
             fig.add_trace(go.Scatter(
                 x=[max_time * LEGEND_X_POS], y=[y_pos],
@@ -579,7 +579,7 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         power = np.array(result["Power"])
         fig.add_trace(go.Scatter(
             x=time_h, y=power,
-            mode='lines', name='总功耗',
+            mode='lines', name='Total Power',
             fill='tozeroy',
             fillcolor=hex_to_rgba(COLORS["secondary"], 0.15),
             line=dict(color=COLORS["secondary"], width=1.5),
@@ -588,7 +588,7 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         avg_power = np.mean(power)
         max_power = np.max(power)
     
-    # 平均功耗参考线（动态偏移）
+    # Average power reference line (dynamic offset)
     power_annotation_offset = max(max_power * 0.05, 0.1)
     fig.add_hline(
         y=avg_power, line_dash="dash", line_color=COLORS["primary"],
@@ -597,21 +597,21 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
     fig.add_trace(go.Scatter(
         x=[max_time * 0.03], y=[avg_power + power_annotation_offset],
         mode='text',
-        text=[f'均值 {avg_power:.2f}W'],
+        text=[f'Avg {avg_power:.2f}W'],
         textfont=dict(size=7, color=COLORS["primary"]),
         textposition='middle right',
         showlegend=False,
         hoverinfo='skip',
     ), row=2, col=1)
     
-    # ========== 3. 状态时间线（纯色块，最低认知负担） ==========
+    # ========== 3. State Timeline (pure color blocks, minimal cognitive load) ==========
     
     unique_states = []
     for s in states:
         if s not in unique_states:
             unique_states.append(s)
     
-    # 绘制状态色块
+    # Draw state color blocks
     prev_state = states[0]
     start_time = time_h[0]
     
@@ -632,11 +632,11 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
             start_time = t
             prev_state = state
     
-    # 状态图例位置配置
+    # State legend position configuration
     STATE_LEGEND_START_X = 0.08
     STATE_LEGEND_WIDTH = 0.85
     
-    # 状态图例（底部水平排列，使用 paper 坐标）
+    # State legend (horizontal at bottom, using paper coordinates)
     n_states = len(unique_states)
     for i, state in enumerate(unique_states):
         color = STATE_COLORS.get(state, COLORS["neutral"])
@@ -650,19 +650,19 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
             xanchor="left",
         )
     
-    # ========== 布局设置 ==========
+    # ========== Layout Settings ==========
     
-    # 标题采用小字号右上角标注形式
+    # Title as small annotation in top right
     fig.add_annotation(
         x=0.95, y=1.01,
         xref="paper", yref="paper",
-        text=f"续航 {ttl_hours:.2f} h | 均值功耗 {avg_power:.2f} W",
+        text=f"TTL {ttl_hours:.2f} h | Avg Power {avg_power:.2f} W",
         showarrow=False,
         font=dict(size=9, color=COLORS["primary"]),
         xanchor="right",
     )
     
-    # 紧凑布局（增加右侧边距以容纳图例）
+    # Compact layout (increased right margin for legend)
     fig.update_layout(
         width=700,
         height=520,
@@ -672,14 +672,14 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         paper_bgcolor="white",
     )
     
-    # Y轴标签（侧边小字号）
+    # Y-axis labels (side, small font)
     fig.update_yaxes(
-        title_text="温度(°C)", title_font_size=9, title_standoff=5,
+        title_text="Temp(°C)", title_font_size=9, title_standoff=5,
         tickfont_size=8, row=1, col=1,
         showgrid=True, gridwidth=0.5, gridcolor="rgba(100,100,100,0.15)",
     )
     fig.update_yaxes(
-        title_text="功耗(W)", title_font_size=9, title_standoff=5,
+        title_text="Power(W)", title_font_size=9, title_standoff=5,
         tickfont_size=8, row=2, col=1,
         showgrid=True, gridwidth=0.5, gridcolor="rgba(100,100,100,0.15)",
     )
@@ -688,16 +688,16 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         range=[0, 1], fixedrange=True,
     )
     
-    # X轴（共享时间轴，仅底部显示刻度和标签）
+    # X-axis (shared time axis, only bottom shows ticks and labels)
     fig.update_xaxes(showticklabels=False, row=1, col=1)
     fig.update_xaxes(showticklabels=False, row=2, col=1)
     fig.update_xaxes(
-        title_text="时间 (小时)", title_font_size=9, title_standoff=3,
+        title_text="Time (hours)", title_font_size=9, title_standoff=3,
         tickfont_size=8, row=3, col=1,
         showgrid=True, gridwidth=0.5, gridcolor="rgba(100,100,100,0.2)",
     )
     
-    # 保存（静态格式）
+    # Save (static format)
     if save_path:
         save_plotly_figure(fig, save_path, size_type="composite")
     
@@ -710,24 +710,24 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
 
 
 # =====================================================
-# SOC 对比图
+# SOC Comparison Chart
 # =====================================================
 
 def plot_soc_comparison(result, save_path=None, show=None):
     """
-    绘制 SOC 对比图：展示各种修正对电池电量预测的影响
+    Plot SOC comparison: showing effects of different correction factors
     """
     time_h = np.array(to_hours(result["time"]))
     
     fig = go.Figure()
     
-    # 线条样式配置
+    # Line style configuration
     line_configs = {
-        "SOC_uncorrected": dict(color=COLORS["neutral"], dash="solid", width=1.8, name="无修正"),
-        "SOC_voltage_only": dict(color=COLORS["accent"], dash="dash", width=1.8, name="仅电压修正"),
-        "SOC_temperature_only": dict(color=COLORS["success"], dash="dashdot", width=1.8, name="仅温度修正"),
-        "SOC_aging_only": dict(color="#8E44AD", dash="dot", width=2.0, name="仅老化修正"),
-        "SOC": dict(color=COLORS["secondary"], dash="solid", width=LINE_WIDTHS["main"], name="全部修正"),
+        "SOC_uncorrected": dict(color=COLORS["neutral"], dash="solid", width=1.8, name="No Correction"),
+        "SOC_voltage_only": dict(color=COLORS["accent"], dash="dash", width=1.8, name="Voltage Only"),
+        "SOC_temperature_only": dict(color=COLORS["success"], dash="dashdot", width=1.8, name="Temperature Only"),
+        "SOC_aging_only": dict(color="#A855F7", dash="dot", width=2.0, name="Aging Only"),
+        "SOC": dict(color=COLORS["secondary"], dash="solid", width=LINE_WIDTHS["main"], name="All Corrections"),
     }
     
     ttl_map = {}
@@ -744,10 +744,10 @@ def plot_soc_comparison(result, save_path=None, show=None):
                 mode='lines',
                 name=config["name"],
                 line=dict(color=config["color"], dash=config["dash"], width=config["width"]),
-                hovertemplate=f'{config["name"]}<br>时间: %{{x:.2f}} h<br>SOC: %{{y:.1f}}%<extra></extra>'
+                hovertemplate=f'{config["name"]}<br>Time: %{{x:.2f}} h<br>SOC: %{{y:.1f}}%<extra></extra>'
             ))
             
-            # 估算续航时间
+            # Estimate TTL
             idx_zero = np.where(soc_data[:n] <= 0)[0]
             if len(idx_zero) > 0:
                 ttl_map[config["name"]] = time_h[idx_zero[0]]
@@ -756,7 +756,7 @@ def plot_soc_comparison(result, save_path=None, show=None):
             
             x_max = max(x_max, ttl_map[config["name"]])
     
-    # 关键电量线
+    # Critical battery lines
     fig.add_hline(y=20, line_dash="dot", line_color=COLORS["warning"],
                   line_width=1, opacity=0.7)
     fig.add_hline(y=5, line_dash="dot", line_color=COLORS["danger"],
@@ -765,11 +765,11 @@ def plot_soc_comparison(result, save_path=None, show=None):
     width, height = FIGURE_SIZES["default"]
     fig.update_layout(
         title=dict(
-            text="SOC 对比：各修正因子效果分析",
+            text="SOC Comparison: Correction Factor Analysis",
             font=dict(size=FONT_SIZES["title"]),
         ),
-        xaxis_title="时间 (小时)",
-        yaxis_title="电量 SOC (%)",
+        xaxis_title="Time (hours)",
+        yaxis_title="State of Charge (%)",
         xaxis=dict(range=[0, x_max * 1.02]),
         yaxis=dict(range=[0, 105]),
         width=width,
@@ -782,8 +782,8 @@ def plot_soc_comparison(result, save_path=None, show=None):
         margin=dict(l=50, r=20, t=50, b=45),
     )
     
-    # 添加统计框
-    stats_lines = ["<b>续航对比</b>"]
+    # Add statistics box
+    stats_lines = ["<b>TTL Comparison</b>"]
     for name, ttl in sorted(ttl_map.items(), key=lambda x: -x[1]):
         stats_lines.append(f"{name}: {ttl:.2f} h")
     

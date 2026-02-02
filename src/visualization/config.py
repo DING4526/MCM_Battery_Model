@@ -122,72 +122,64 @@ def get_save_path(filename, subdir=""):
 
 
 # =====================================================
-# 配色方案（论文级专业配色 - 深沉低饱和）
+# Color Scheme (Bright, High Contrast, Professional)
 # =====================================================
 
 COLORS = {
-    "primary": "#34495E",      # 深蓝灰
-    "secondary": "#8B4513",    # 深棕色（温度）
-    "accent": "#2C5F7C",       # 深青蓝
-    "success": "#3D6B4F",      # 深绿
-    "danger": "#A0522D",       # 褐红色
-    "neutral": "#5D6D7E",      # 中灰蓝
-    "warning": "#8B6914",      # 深金色
+    "primary": "#2563EB",      # Vivid Blue
+    "secondary": "#DC2626",    # Vivid Red (Temperature)
+    "accent": "#0891B2",       # Cyan
+    "success": "#16A34A",      # Green
+    "danger": "#E11D48",       # Rose Red
+    "neutral": "#64748B",      # Slate Gray
+    "warning": "#F59E0B",      # Amber
 }
 
-# 使用状态配色（低饱和、高区分度）
+# Usage State Colors (Bright, High Contrast)
 STATE_COLORS = {
-    "DeepIdle": "#7B8A8B",     # 灰色
-    "Social": "#4A6F8A",       # 暗蓝
-    "Video": "#6B4F7A",        # 暗紫
-    "Gaming": "#8B4D4D",       # 暗红
-    "Navigation": "#7A6332",   # 暗黄棕
-    "Camera": "#3D7A6B",       # 暗青绿
+    "DeepIdle": "#94A3B8",     # Light Gray
+    "Social": "#3B82F6",       # Blue
+    "Video": "#A855F7",        # Purple
+    "Gaming": "#EF4444",       # Red
+    "Navigation": "#F97316",   # Orange
+    "Camera": "#14B8A6",       # Teal
 }
 
-# 场景配色
+# Scenario Colors
 SCENARIO_COLORS = {
-    "Student Daily": "#4A6F8A",
-    "学生日常": "#4A6F8A",
-    "Commute": "#8B4D4D",
-    "通勤": "#8B4D4D",
-    "Weekend": "#6B4F7A",
-    "周末娱乐": "#6B4F7A",
-    "Travel": "#3D7A6B",
-    "旅行": "#3D7A6B",
-    "DeepIdle Only": "#7B8A8B",
-    "纯待机": "#7B8A8B",
-    "Gaming Only": "#8B4D4D",
-    "纯游戏": "#8B4D4D",
-    "Video Only": "#6B4F7A",
-    "纯视频": "#6B4F7A",
-    "Navigation Only": "#7A6332",
-    "纯导航": "#7A6332",
+    "Student Daily": "#3B82F6",
+    "Commute": "#EF4444",
+    "Weekend": "#A855F7",
+    "Travel": "#14B8A6",
+    "DeepIdle Only": "#94A3B8",
+    "Gaming Only": "#EF4444",
+    "Video Only": "#A855F7",
+    "Navigation Only": "#F97316",
 }
 
-# 默认颜色序列（低饱和专业色）
+# Default Color Sequence (Bright, Distinct)
 DEFAULT_COLORS = [
-    "#4A6F8A", "#8B4D4D", "#3D7A6B", "#6B4F7A",
-    "#7A6332", "#5D6D7E", "#34495E", "#7B8A8B",
+    "#3B82F6", "#EF4444", "#14B8A6", "#A855F7",
+    "#F97316", "#06B6D4", "#8B5CF6", "#10B981",
 ]
 
-# 功耗分解配色（深沉低饱和，通过明度区分层级）
+# Power Breakdown Colors (Distinct, Layered)
 POWER_BREAKDOWN_COLORS = {
-    "屏幕": "#6B7B8C",       # 浅灰蓝（最上层，明度最高）
-    "CPU": "#4A6B5C",        # 深绿灰
-    "无线通信": "#5A6B7C",   # 中灰蓝
-    "GPS": "#7A6B4A",        # 棕灰
-    "后台": "#5A5A6A",       # 暗灰紫（最底层，明度最低）
+    "Screen": "#60A5FA",       # Light Blue (Top layer)
+    "CPU": "#34D399",          # Emerald Green
+    "Radio": "#FBBF24",        # Yellow
+    "GPS": "#F97316",          # Orange
+    "Background": "#A78BFA",   # Light Purple (Bottom layer)
 }
 
 PARAM_LABELS = {
-    "u": "屏幕亮度",
-    "r": "刷新率",
-    "u_cpu": "CPU 利用率",
-    "lambda_cell": "蜂窝网络比例",
-    "delta_signal": "信号质量修正",
-    "r_on": "GPS 开启比例",
-    "r_bg": "后台活跃比例",
+    "u": "Screen Brightness",
+    "r": "Refresh Rate",
+    "u_cpu": "CPU Utilization",
+    "lambda_cell": "Cellular Ratio",
+    "delta_signal": "Signal Quality",
+    "r_on": "GPS Active Ratio",
+    "r_bg": "Background Ratio",
 }
 
 
