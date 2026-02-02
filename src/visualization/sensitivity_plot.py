@@ -1,133 +1,119 @@
 # visualization/sensitivity_plot.py
-# 敏感度分析可视化模块
+# Sensitivity Analysis Visualization Module (Plotly - Single Column Paper Optimized)
 #
-# 提供多种敏感度可视化方式：
-# - 柱状图
-# - 龙卷风图
-# - 蜘蛛图
-# - 热力图
+# Professional sensitivity visualizations:
+# - Bar Chart
+# - Tornado Chart
+# - Spider Chart
+# - Heatmap
+# - Comprehensive Analysis
 
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import numpy as np
-from matplotlib.patches import Patch
 
-# 从统一配置模块导入
 from .config import (
-    setup_style as _setup_style,
-    COLORS,
-    PARAM_LABELS,
-    save_figure,
-    get_save_path,
-    smart_savefig,
-    get_show_plots,
+    COLORS, DEFAULT_COLORS, PARAM_LABELS,
+    FONT_SIZES, LINE_WIDTHS, FIGURE_SIZES,
+    get_show_plots, save_plotly_figure,
+    setup_style,
 )
+
+setup_style()
 
 
 def _get_label(param):
-    """获取参数的中文标签"""
+    """Get parameter label"""
     return PARAM_LABELS.get(param, param)
 
 
 # =====================================================
-# 敏感度可视化函数
+# Sensitivity Bar Chart
 # =====================================================
 
-def plot_sensitivity_bar(sens_results, filename=None, subdir="", ax=None, show=None, save_path=None, 
-                         normalized=True, sort=True):
+def plot_sensitivity_bar(sens_results, filename=None, subdir="", ax=None, show=None,
+                         save_path=None, normalized=True, sort=True):
     """
-    绘制敏感度柱状图
-    
-    参数：
-        sens_results : dict - 敏感度分析结果
-        filename : str - 保存文件名
-        subdir : str - 输出子目录
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 兼容旧接口
-        normalized : bool - 是否使用归一化敏感度
-        sort : bool - 是否按敏感度排序
+    Plot sensitivity bar chart
     """
-    _setup_style()
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # 准备数据（排除内部字段）
+    # Exclude internal fields
     params = [p for p in sens_results.keys() if not p.startswith('_')]
+    
     if normalized:
         values = [sens_results[p]["S_norm"] for p in params]
-        ylabel = "归一化敏感度"
+        ylabel = "Normalized Sensitivity"
     else:
         values = [sens_results[p]["S"] / 3600 for p in params]
-        ylabel = "敏感度 (小时)"
+        ylabel = "Sensitivity (hours)"
     
     labels = [_get_label(p) for p in params]
     
-    # 排序
+    # Sort
     if sort:
         sorted_indices = np.argsort(np.abs(values))[::-1]
         params = [params[i] for i in sorted_indices]
         values = [values[i] for i in sorted_indices]
         labels = [labels[i] for i in sorted_indices]
     
-    # 颜色（正负不同）
+    # Colors (positive/negative)
     colors = [COLORS["danger"] if v < 0 else COLORS["success"] for v in values]
     
-    # 绘制柱状图
-    bars = ax.barh(range(len(params)), values, color=colors, alpha=0.8, edgecolor='white')
+    fig = go.Figure()
     
-    ax.set_yticks(range(len(params)))
-    ax.set_yticklabels(labels)
-    ax.set_xlabel(ylabel, fontsize=11)
-    ax.set_title("参数敏感度分析", fontsize=13, fontweight='bold')
-    ax.axvline(x=0, color='black', linewidth=0.8)
-    ax.grid(True, alpha=0.3, axis='x')
+    fig.add_trace(go.Bar(
+        y=labels,
+        x=values,
+        orientation='h',
+        marker=dict(color=colors, line=dict(color='white', width=1)),
+        text=[f'{v:.3f}' for v in values],
+        textposition='outside',
+        textfont=dict(size=FONT_SIZES["annotation"]),
+        hovertemplate='%{y}<br>Sensitivity: %{x:.4f}<extra></extra>',
+    ))
     
-    plt.tight_layout()
+    fig.add_vline(x=0, line_color=COLORS["primary"], line_width=LINE_WIDTHS["axis"])
     
-    if filename:
-        smart_savefig(filename, subdir)
-    elif save_path:
-        smart_savefig(save_path)
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(text="Parameter Sensitivity Analysis", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title=ylabel,
+        yaxis=dict(autorange="reversed"),
+        width=width,
+        height=height,
+        margin=dict(l=100, r=60, t=50, b=45),
+    )
+    
+    path = filename or save_path
+    if path:
+        save_plotly_figure(fig, path, subdir, size_type="default")
     
     if show is None:
         show = get_show_plots()
     if show:
-        plt.show()
+        fig.show()
     
-    return ax
+    return fig
 
 
-def plot_sensitivity_tornado(sens_results, baseline_ttl, ax=None, show=True, 
+# =====================================================
+# Tornado Chart
+# =====================================================
+
+def plot_sensitivity_tornado(sens_results, baseline_ttl, ax=None, show=True,
                               save_path=None, sort=True):
     """
-    绘制敏感度龙卷风图
-    
-    参数：
-        sens_results : dict - 敏感度分析结果
-        baseline_ttl : float - 基准 TTL（秒）
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
-        sort : bool - 是否按影响大小排序
+    Plot sensitivity tornado chart
     """
-    _setup_style()
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(12, 7))
-    
+    params = [p for p in sens_results.keys() if not p.startswith('_')]
     baseline_h = baseline_ttl / 3600
     
-    # 准备数据
-    params = list(sens_results.keys())
     ttl_plus = [sens_results[p]["TTL+"] / 3600 for p in params]
     ttl_minus = [sens_results[p]["TTL-"] / 3600 for p in params]
     labels = [_get_label(p) for p in params]
     
-    # 计算影响范围
+    # Calculate impact range and sort
     ranges = [abs(ttl_plus[i] - ttl_minus[i]) for i in range(len(params))]
     
-    # 排序
     if sort:
         sorted_indices = np.argsort(ranges)[::-1]
         params = [params[i] for i in sorted_indices]
@@ -135,240 +121,307 @@ def plot_sensitivity_tornado(sens_results, baseline_ttl, ax=None, show=True,
         ttl_minus = [ttl_minus[i] for i in sorted_indices]
         labels = [labels[i] for i in sorted_indices]
     
-    y_pos = range(len(params))
+    fig = go.Figure()
     
-    # 绘制龙卷风图
-    for i, (low, high) in enumerate(zip(ttl_minus, ttl_plus)):
-        # 左侧（负扰动）
-        ax.barh(i, low - baseline_h, left=baseline_h, color=COLORS["primary"], 
-                alpha=0.8, height=0.6, label='参数 -20%' if i == 0 else "")
-        # 右侧（正扰动）
-        ax.barh(i, high - baseline_h, left=baseline_h, color=COLORS["accent"], 
-                alpha=0.8, height=0.6, label='参数 +20%' if i == 0 else "")
+    # Negative perturbation
+    fig.add_trace(go.Bar(
+        y=labels,
+        x=[t - baseline_h for t in ttl_minus],
+        orientation='h',
+        name='Param -20%',
+        marker=dict(color=COLORS["accent"]),
+        base=baseline_h,
+        hovertemplate='%{y}<br>TTL: %{x:.2f} h<extra></extra>',
+    ))
     
-    # 基准线
-    ax.axvline(x=baseline_h, color='black', linewidth=2, linestyle='--', 
-               label=f'基准值: {baseline_h:.2f} h')
+    # Positive perturbation
+    fig.add_trace(go.Bar(
+        y=labels,
+        x=[t - baseline_h for t in ttl_plus],
+        orientation='h',
+        name='Param +20%',
+        marker=dict(color=COLORS["warning"]),
+        base=baseline_h,
+        hovertemplate='%{y}<br>TTL: %{x:.2f} h<extra></extra>',
+    ))
     
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(labels)
-    ax.set_xlabel("续航时间 TTL (小时)", fontsize=11)
-    ax.set_title("参数敏感度龙卷风图", fontsize=13, fontweight='bold')
-    ax.legend(loc='upper right', fontsize=9)
-    ax.grid(True, alpha=0.3, axis='x')
+    # Baseline line
+    fig.add_vline(x=baseline_h, line_dash="dash", line_color=COLORS["primary"],
+                  line_width=LINE_WIDTHS["main"],
+                  annotation_text=f"Baseline: {baseline_h:.2f} h",
+                  annotation_position="top",
+                  annotation_font_size=FONT_SIZES["annotation"])
+    
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(text="Parameter Sensitivity Tornado Chart", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time-to-Live TTL (hours)",
+        yaxis=dict(autorange="reversed"),
+        barmode='overlay',
+        width=width,
+        height=height,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.15,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=FONT_SIZES["legend"]),
+        ),
+        margin=dict(l=100, r=20, t=50, b=70),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="default")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# Spider Chart (Radar Chart)
+# =====================================================
 
 def plot_sensitivity_spider(sens_results, ax=None, show=True, save_path=None):
     """
-    绘制敏感度蜘蛛图（雷达图）
-    
-    参数：
-        sens_results : dict - 敏感度分析结果
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
+    Plot sensitivity spider chart (radar chart)
     """
-    _setup_style()
-    
-    # 准备数据
-    params = list(sens_results.keys())
+    params = [p for p in sens_results.keys() if not p.startswith('_')]
     values = [abs(sens_results[p]["S_norm"]) for p in params]
     labels = [_get_label(p) for p in params]
     
-    # 角度
-    angles = np.linspace(0, 2 * np.pi, len(params), endpoint=False).tolist()
+    # Close the figure
+    values_closed = values + [values[0]]
+    labels_closed = labels + [labels[0]]
     
-    # 闭合图形
-    values = values + [values[0]]
-    angles = angles + [angles[0]]
-    labels = labels + [labels[0]]
+    fig = go.Figure()
     
-    # 创建极坐标图
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+    fig.add_trace(go.Scatterpolar(
+        r=values_closed,
+        theta=labels_closed,
+        fill='toself',
+        fillcolor='rgba(8, 145, 178, 0.25)',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        marker=dict(size=6, color=COLORS["accent"]),
+        hovertemplate='%{theta}<br>|S|: %{r:.4f}<extra></extra>',
+    ))
     
-    # 绘制蜘蛛图
-    ax.fill(angles, values, color=COLORS["primary"], alpha=0.25)
-    ax.plot(angles, values, color=COLORS["primary"], linewidth=2, marker='o', markersize=8)
-    
-    # 设置标签
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels[:-1], fontsize=10)
-    
-    ax.set_title("参数敏感度蜘蛛图\n（归一化敏感度绝对值）", fontsize=13, fontweight='bold', y=1.1)
+    width, height = FIGURE_SIZES["square"]
+    fig.update_layout(
+        title=dict(text="Parameter Sensitivity Radar Chart", font=dict(size=FONT_SIZES["title"])),
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                tickfont=dict(size=FONT_SIZES["axis_tick"]),
+            ),
+            angularaxis=dict(
+                tickfont=dict(size=FONT_SIZES["axis_tick"]),
+            ),
+        ),
+        width=width,
+        height=height,
+        margin=dict(l=60, r=60, t=60, b=60),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="square")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# Sensitivity Heatmap
+# =====================================================
 
 def plot_sensitivity_heatmap(sens_results, ax=None, show=True, save_path=None):
     """
-    绘制敏感度热力图
-    
-    参数：
-        sens_results : dict - 敏感度分析结果
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
+    Plot sensitivity heatmap
     """
-    _setup_style()
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(12, 6))
-    
-    # 准备数据
-    params = list(sens_results.keys())
+    params = [p for p in sens_results.keys() if not p.startswith('_')]
     labels = [_get_label(p) for p in params]
     
-    # 创建数据矩阵
+    # Data matrix
     data = np.zeros((len(params), 3))
     for i, p in enumerate(params):
         data[i, 0] = sens_results[p]["TTL-"] / 3600
-        data[i, 1] = (sens_results[p]["TTL+"] + sens_results[p]["TTL-"]) / 2 / 3600  # 基准近似
+        data[i, 1] = (sens_results[p]["TTL+"] + sens_results[p]["TTL-"]) / 2 / 3600
         data[i, 2] = sens_results[p]["TTL+"] / 3600
     
-    # 绘制热力图
-    im = ax.imshow(data, cmap='RdYlGn', aspect='auto')
+    fig = go.Figure()
     
-    # 设置标签
-    ax.set_yticks(range(len(params)))
-    ax.set_yticklabels(labels)
-    ax.set_xticks([0, 1, 2])
-    ax.set_xticklabels(['参数 -20%', '基准', '参数 +20%'])
+    fig.add_trace(go.Heatmap(
+        z=data,
+        x=['Param -20%', 'Baseline', 'Param +20%'],
+        y=labels,
+        colorscale='RdYlGn',
+        text=[[f'{v:.2f}' for v in row] for row in data],
+        texttemplate='%{text}',
+        textfont=dict(size=FONT_SIZES["annotation"]),
+        hovertemplate='%{y}<br>%{x}: %{z:.3f} h<extra></extra>',
+        colorbar=dict(
+            title=dict(text='TTL (h)', font=dict(size=FONT_SIZES["axis_tick"])),
+            tickfont=dict(size=FONT_SIZES["axis_tick"]),
+        ),
+    ))
     
-    # 添加数值标注
-    for i in range(len(params)):
-        for j in range(3):
-            text = ax.text(j, i, f'{data[i, j]:.2f}',
-                          ha="center", va="center", color="black", fontsize=10)
-    
-    # 颜色条
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label('续航时间 TTL (小时)', fontsize=10)
-    
-    ax.set_title("参数敏感度热力图", fontsize=13, fontweight='bold')
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(text="Parameter Sensitivity Heatmap", font=dict(size=FONT_SIZES["title"])),
+        width=width,
+        height=height,
+        margin=dict(l=100, r=80, t=50, b=45),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="default")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
 
-def plot_sensitivity_comprehensive(sens_results, baseline_ttl, filename=None, subdir="", save_path=None, show=None):
+# =====================================================
+# Comprehensive Sensitivity Analysis
+# =====================================================
+
+def plot_sensitivity_comprehensive(sens_results, baseline_ttl, filename=None, subdir="",
+                                    save_path=None, show=None):
     """
-    绘制敏感度分析综合图表
-    
-    参数：
-        sens_results : dict - 敏感度分析结果
-        baseline_ttl : float - 基准 TTL（秒）
-        filename : str - 保存文件名
-        subdir : str - 输出子目录
-        save_path : str - 兼容旧接口
-        show : bool - 是否显示图形
+    Plot comprehensive sensitivity analysis chart
     """
-    _setup_style()
+    params = [p for p in sens_results.keys() if not p.startswith('_')]
     
-    fig = plt.figure(figsize=(16, 12))
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=("Normalized Sensitivity", "Tornado Chart", "Radar Chart", "Analysis Insights"),
+        specs=[
+            [{"type": "xy"}, {"type": "xy"}],
+            [{"type": "polar"}, {"type": "table"}],
+        ],
+        vertical_spacing=0.12,
+        horizontal_spacing=0.1,
+    )
     
-    # ===== 左上：归一化敏感度柱状图 =====
-    ax1 = fig.add_subplot(2, 2, 1)
-    plot_sensitivity_bar(sens_results, ax=ax1, show=False, normalized=True)
+    # 1. Bar chart
+    values = [sens_results[p]["S_norm"] for p in params]
+    labels = [_get_label(p) for p in params]
+    sorted_indices = np.argsort(np.abs(values))[::-1]
+    sorted_values = [values[i] for i in sorted_indices]
+    sorted_labels = [labels[i] for i in sorted_indices]
+    colors = [COLORS["danger"] if v < 0 else COLORS["success"] for v in sorted_values]
     
-    # ===== 右上：龙卷风图 =====
-    ax2 = fig.add_subplot(2, 2, 2)
-    plot_sensitivity_tornado(sens_results, baseline_ttl, ax=ax2, show=False)
+    fig.add_trace(go.Bar(
+        y=sorted_labels, x=sorted_values, orientation='h',
+        marker=dict(color=colors),
+        showlegend=False,
+    ), row=1, col=1)
     
-    # ===== 左下：蜘蛛图 =====
-    ax3 = fig.add_subplot(2, 2, 3, polar=True)
-    plot_sensitivity_spider(sens_results, ax=ax3, show=False)
+    # 2. Tornado chart
+    baseline_h = baseline_ttl / 3600
+    ttl_plus = [sens_results[p]["TTL+"] / 3600 for p in params]
+    ttl_minus = [sens_results[p]["TTL-"] / 3600 for p in params]
     
-    # ===== 右下：统计面板 =====
-    ax4 = fig.add_subplot(2, 2, 4)
-    ax4.axis('off')
+    ranges = [abs(ttl_plus[i] - ttl_minus[i]) for i in range(len(params))]
+    sorted_idx2 = np.argsort(ranges)[::-1]
     
-    # 计算关键洞察
-    params = list(sens_results.keys())
+    fig.add_trace(go.Bar(
+        y=[labels[i] for i in sorted_idx2],
+        x=[ttl_minus[i] - baseline_h for i in sorted_idx2],
+        orientation='h', name='-20%',
+        marker=dict(color=COLORS["accent"]),
+        base=baseline_h,
+        showlegend=True,
+    ), row=1, col=2)
+    
+    fig.add_trace(go.Bar(
+        y=[labels[i] for i in sorted_idx2],
+        x=[ttl_plus[i] - baseline_h for i in sorted_idx2],
+        orientation='h', name='+20%',
+        marker=dict(color=COLORS["warning"]),
+        base=baseline_h,
+        showlegend=True,
+    ), row=1, col=2)
+    
+    # 3. Radar chart
+    radar_values = [abs(sens_results[p]["S_norm"]) for p in params]
+    radar_values_closed = radar_values + [radar_values[0]]
+    labels_closed = labels + [labels[0]]
+    
+    fig.add_trace(go.Scatterpolar(
+        r=radar_values_closed,
+        theta=labels_closed,
+        fill='toself',
+        fillcolor='rgba(8, 145, 178, 0.25)',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        showlegend=False,
+    ), row=2, col=1)
+    
+    # 4. Insights table
     s_norms = {p: sens_results[p]["S_norm"] for p in params}
-    
-    # 找出最敏感的参数
     most_sensitive = max(params, key=lambda p: abs(s_norms[p]))
     least_sensitive = min(params, key=lambda p: abs(s_norms[p]))
     
-    # 正负敏感参数
-    positive_sens = [p for p in params if s_norms[p] > 0]
-    negative_sens = [p for p in params if s_norms[p] < 0]
+    positive_sens = [_get_label(p) for p in params if s_norms[p] > 0]
+    negative_sens = [_get_label(p) for p in params if s_norms[p] < 0]
     
-    # 使用纯ASCII边框，兼容性更好
-    insights_text_parts = [f"""
-    +==================================================+
-    |         [Sens] 敏 感 度 分 析 洞 察              |
-    +==================================================+
-    |                                                  |
-    |  基准续航时间:  {baseline_ttl/3600:>8.2f} 小时                 |
-    |                                                  |
-    |  ----------- 关键发现 -----------                |
-    |                                                  |
-    |  [!] 最敏感参数:  {_get_label(most_sensitive):<15}             |
-    |      敏感度: {s_norms[most_sensitive]:>8.4f}                       |
-    |                                                  |
-    |  [o] 最不敏感参数: {_get_label(least_sensitive):<15}            |
-    |      敏感度: {s_norms[least_sensitive]:>8.4f}                       |
-    |                                                  |
-    |  ----------- 参数分类 -----------                |
-    |                                                  |
-    |  负敏感度（增加->减少TTL）:                       |
-    """]
+    fig.add_trace(go.Table(
+        header=dict(
+            values=["<b>Analysis</b>", "<b>Result</b>"],
+            fill_color=COLORS["accent"],
+            font=dict(color='white', size=FONT_SIZES["axis_tick"]),
+            align='center', height=24,
+        ),
+        cells=dict(
+            values=[
+                ["Baseline TTL", "Most Sensitive", "Least Sensitive", "Negative Sens.", "Positive Sens."],
+                [f"{baseline_h:.2f} h",
+                 f"{_get_label(most_sensitive)} ({s_norms[most_sensitive]:.4f})",
+                 f"{_get_label(least_sensitive)} ({s_norms[least_sensitive]:.4f})",
+                 ", ".join(negative_sens) if negative_sens else "None",
+                 ", ".join(positive_sens) if positive_sens else "None"]
+            ],
+            fill_color=['rgba(236, 240, 241, 0.8)', 'white'],
+            font=dict(size=FONT_SIZES["annotation"]),
+            align=['left', 'left'], height=22,
+        )
+    ), row=2, col=2)
     
-    # 使用列表收集字符串，避免循环中字符串拼接
-    for p in negative_sens:
-        insights_text_parts.append(f"|    - {_get_label(p):<20} ({s_norms[p]:.4f})      |\n")
+    # Layout
+    fig.update_xaxes(title_text="Normalized Sens.", row=1, col=1)
+    fig.update_yaxes(autorange="reversed", row=1, col=1)
+    fig.update_xaxes(title_text="TTL (h)", row=1, col=2)
+    fig.update_yaxes(autorange="reversed", row=1, col=2)
     
-    insights_text_parts.append("""|                                                  |
-|  正敏感度（增加->增加TTL）:                       |
-""")
+    width, height = FIGURE_SIZES["composite"]
+    fig.update_layout(
+        title=dict(text="Parameter Sensitivity Analysis Report", font=dict(size=FONT_SIZES["title"])),
+        width=width + 100,
+        height=height,
+        barmode='overlay',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.08,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=FONT_SIZES["legend"]),
+        ),
+        margin=dict(l=80, r=20, t=60, b=70),
+    )
     
-    for p in positive_sens:
-        insights_text_parts.append(f"|    - {_get_label(p):<20} ({s_norms[p]:.4f})      |\n")
-    
-    insights_text_parts.append("""|                                                  |
-+==================================================+
-""")
-    
-    insights_text = ''.join(insights_text_parts)
-    
-    ax4.text(0.05, 0.5, insights_text, transform=ax4.transAxes, fontsize=9,
-             verticalalignment='center',
-             bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
-    
-    # 总标题
-    fig.suptitle("[Sensitivity] 参数敏感度分析综合报告", fontsize=16, fontweight='bold', y=1.02)
-    
-    plt.tight_layout()
-    
-    if filename:
-        smart_savefig(filename, subdir)
-    elif save_path:
-        smart_savefig(save_path)
+    path = filename or save_path
+    if path:
+        save_plotly_figure(fig, path, subdir, size_type="composite")
     
     if show is None:
         show = get_show_plots()
     if show:
-        plt.show()
+        fig.show()
     
     return fig

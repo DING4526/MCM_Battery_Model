@@ -1,28 +1,25 @@
 # visualization/comparison.py
-# 场景对比可视化模块
+# Scenario Comparison Visualization Module (Plotly - Single Column Paper Optimized)
 #
-# 提供多种场景对比可视化方式：
-# - 场景对比柱状图
-# - 多场景箱线图
-# - 雷达图
-# - 多场景时间线对比
+# Professional scenario comparison visualizations:
+# - Scenario Comparison Bar Chart
+# - Multi-Scenario Box Plot
+# - Radar Chart
+# - Multi-Scenario Timeline Comparison
 
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import numpy as np
-from matplotlib.patches import Patch
 
-# 从统一配置模块导入
 from .config import (
-    setup_style as _setup_style,
-    COLORS,
-    SCENARIO_COLORS,
-    DEFAULT_COLORS,
-    to_hours as _to_hours,
-    save_figure,
-    get_save_path,
-    smart_savefig,
-    get_show_plots,
+    COLORS, SCENARIO_COLORS, DEFAULT_COLORS,
+    FONT_SIZES, LINE_WIDTHS, FIGURE_SIZES,
+    to_hours, get_show_plots, save_plotly_figure,
+    hex_to_rgba,
+    setup_style,
 )
+
+setup_style()
 
 
 def _get_color(scenario_name, index):
@@ -33,155 +30,133 @@ def _get_color(scenario_name, index):
 
 
 # =====================================================
-# 场景对比可视化函数
+# Scenario Comparison Bar Chart
 # =====================================================
 
-def plot_scenario_comparison(comparison_results, filename=None, subdir="", ax=None, show=None, save_path=None, 
-                              error_bars=True):
+def plot_scenario_comparison(comparison_results, filename=None, subdir="", ax=None,
+                              show=None, save_path=None, error_bars=True):
     """
-    绘制场景对比柱状图
-    
-    参数：
-        comparison_results : dict - 对比结果
-        filename : str - 保存文件名
-        subdir : str - 输出子目录
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 兼容旧接口
-        error_bars : bool - 是否显示误差棒
+    Plot scenario comparison bar chart
     """
-    _setup_style()
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(12, 7))
-    
     scenarios = list(comparison_results.keys())
-    
     values = [comparison_results[s]["mean"] / 3600 for s in scenarios]
     errors = [comparison_results[s]["std"] / 3600 for s in scenarios] if error_bars else None
-    
     colors = [_get_color(s, i) for i, s in enumerate(scenarios)]
     
-    x = range(len(scenarios))
-    bars = ax.bar(x, values, color=colors, alpha=0.8, edgecolor='white')
+    fig = go.Figure()
     
-    if error_bars and errors:
-        ax.errorbar(x, values, yerr=errors, fmt='none', color='black', capsize=5)
+    fig.add_trace(go.Bar(
+        x=scenarios,
+        y=values,
+        marker=dict(color=colors, line=dict(color='white', width=1)),
+        error_y=dict(type='data', array=errors, visible=error_bars) if errors else None,
+        text=[f'{v:.2f} h' for v in values],
+        textposition='outside',
+        textfont=dict(size=FONT_SIZES["annotation"]),
+        hovertemplate='%{x}<br>TTL: %{y:.2f} h<extra></extra>',
+    ))
     
-    for bar, val in zip(bars, values):
-        ax.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.1,
-                f'{val:.2f}h', ha='center', va='bottom', fontsize=10)
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(text="Usage Scenario TTL Comparison", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Usage Scenario",
+        yaxis_title="Average TTL (hours)",
+        xaxis=dict(tickangle=-15),
+        width=width,
+        height=height,
+        margin=dict(l=50, r=20, t=50, b=70),
+    )
     
-    ax.set_xticks(x)
-    ax.set_xticklabels(scenarios, rotation=15, ha='right')
-    ax.set_ylabel("平均续航时间 (小时)")
-    ax.set_title("不同使用场景续航时间对比")
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    plt.tight_layout()
-    
-    if filename:
-        smart_savefig(filename, subdir)
-    elif save_path:
-        smart_savefig(save_path)
+    path = filename or save_path
+    if path:
+        save_plotly_figure(fig, path, subdir, size_type="default")
     
     if show is None:
         show = get_show_plots()
     if show:
-        plt.show()
+        fig.show()
     
-    return ax
+    return fig
 
+
+# =====================================================
+# Multi-Scenario Box Plot
+# =====================================================
 
 def plot_scenario_boxplot(comparison_results, ax=None, show=True, save_path=None):
     """
-    绘制多场景箱线图对比
-    
-    参数：
-        comparison_results : dict - 对比结果
-            {scenario_name: {"ttl_list": [...], ...}}
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
+    Plot multi-scenario box plot comparison
     """
-    _setup_style()
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(12, 7))
-    
     scenarios = list(comparison_results.keys())
-    data = [_to_hours(comparison_results[s]["ttl_list"]) for s in scenarios]
-    colors = [_get_color(s, i) for i, s in enumerate(scenarios)]
     
-    # 箱线图
-    bp = ax.boxplot(data, patch_artist=True, labels=scenarios)
+    fig = go.Figure()
     
-    # 设置颜色
-    for patch, color in zip(bp['boxes'], colors):
-        patch.set_facecolor(color)
-        patch.set_alpha(0.7)
+    for i, s in enumerate(scenarios):
+        ttl_h = to_hours(comparison_results[s]["ttl_list"])
+        color = _get_color(s, i)
+        
+        fig.add_trace(go.Box(
+            y=ttl_h,
+            name=s,
+            marker=dict(color=color),
+            boxmean='sd',
+            fillcolor=hex_to_rgba(color, 0.4),
+            line=dict(color=color, width=LINE_WIDTHS["main"]),
+        ))
     
-    for median in bp['medians']:
-        median.set_color('black')
-        median.set_linewidth(2)
+    # Mean markers
+    means = [np.mean(to_hours(comparison_results[s]["ttl_list"])) for s in scenarios]
+    fig.add_trace(go.Scatter(
+        x=scenarios,
+        y=means,
+        mode='markers',
+        name='Mean',
+        marker=dict(color=COLORS["danger"], size=8, symbol='diamond',
+                   line=dict(color='white', width=1)),
+    ))
     
-    # 添加散点（小样本时）
-    for i, (d, color) in enumerate(zip(data, colors)):
-        if len(d) <= 100:
-            jitter = np.random.normal(0, 0.04, size=len(d))
-            ax.scatter(i + 1 + jitter, d, alpha=0.3, color=color, s=15)
-    
-    # 添加均值标记
-    means = [np.mean(d) for d in data]
-    ax.scatter(range(1, len(scenarios) + 1), means, color='red', marker='D', s=80, 
-               zorder=5, label='均值')
-    
-    ax.set_xticklabels(scenarios, rotation=15, ha='right', fontsize=10)
-    ax.set_ylabel("续航时间 TTL (小时)", fontsize=11)
-    ax.set_title("不同使用场景 TTL 分布对比", fontsize=13, fontweight='bold')
-    ax.legend(loc='upper right', fontsize=9)
-    ax.grid(True, alpha=0.3, axis='y')
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(text="Usage Scenario TTL Distribution", font=dict(size=FONT_SIZES["title"])),
+        yaxis_title="Time-to-Live TTL (hours)",
+        xaxis=dict(tickangle=-15),
+        width=width,
+        height=height,
+        showlegend=False,
+        margin=dict(l=50, r=20, t=50, b=70),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="default")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# Scenario Radar Chart
+# =====================================================
 
 def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, save_path=None):
     """
-    绘制场景对比雷达图
-    
-    参数：
-        comparison_results : dict - 对比结果
-        metrics : list - 用于雷达图的指标列表
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
+    Plot scenario comparison radar chart
     """
-    _setup_style()
-    
     scenarios = list(comparison_results.keys())
     
-    # 默认指标
     if metrics is None:
         metrics = ["mean", "std", "min", "max", "median"]
     
     metric_labels = {
-        "mean": "平均值",
-        "std": "标准差",
-        "min": "最小值",
-        "max": "最大值",
-        "median": "中位数"
+        "mean": "Mean", "std": "Std Dev", "min": "Min",
+        "max": "Max", "median": "Median"
     }
     
-    # 准备数据
+    # Prepare data
     data = {}
     for s in scenarios:
-        ttl_h = _to_hours(comparison_results[s]["ttl_list"])
+        ttl_h = to_hours(comparison_results[s]["ttl_list"])
         data[s] = {
             "mean": np.mean(ttl_h),
             "std": np.std(ttl_h),
@@ -190,7 +165,7 @@ def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, sa
             "median": np.median(ttl_h)
         }
     
-    # 归一化数据（每个指标 0-1）
+    # Normalize
     normalized = {}
     for m in metrics:
         vals = [data[s][m] for s in scenarios]
@@ -201,189 +176,252 @@ def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, sa
                 normalized[s] = []
             normalized[s].append((data[s][m] - min_v) / range_v)
     
-    # 角度
-    angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
-    angles += angles[:1]
-    
-    # 标签
     labels = [metric_labels.get(m, m) for m in metrics]
+    labels_closed = labels + [labels[0]]
     
-    # 创建极坐标图
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
+    fig = go.Figure()
     
-    # 绘制每个场景
     for i, s in enumerate(scenarios):
         values = normalized[s] + [normalized[s][0]]
         color = _get_color(s, i)
-        ax.fill(angles, values, color=color, alpha=0.1)
-        ax.plot(angles, values, color=color, linewidth=2, marker='o', markersize=6, label=s)
+        
+        fig.add_trace(go.Scatterpolar(
+            r=values,
+            theta=labels_closed,
+            fill='toself',
+            fillcolor=hex_to_rgba(color, 0.15),
+            line=dict(color=color, width=LINE_WIDTHS["main"]),
+            marker=dict(size=5, color=color),
+            name=s,
+        ))
     
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels, fontsize=10)
-    ax.set_title("场景多维度对比雷达图\n（归一化指标）", fontsize=13, fontweight='bold', y=1.1)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=9)
+    width, height = FIGURE_SIZES["square"]
+    fig.update_layout(
+        title=dict(text="Scenario Multi-Dimensional Comparison", font=dict(size=FONT_SIZES["title"])),
+        polar=dict(
+            radialaxis=dict(visible=True, tickfont=dict(size=FONT_SIZES["axis_tick"])),
+            angularaxis=dict(tickfont=dict(size=FONT_SIZES["axis_tick"])),
+        ),
+        legend=dict(
+            font=dict(size=FONT_SIZES["legend"]),
+            x=1.1, y=0.9,
+        ),
+        width=width + 100,
+        height=height,
+        margin=dict(l=60, r=100, t=60, b=60),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="square")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# Multi-Scenario Timeline Comparison
+# =====================================================
 
 def plot_multi_scenario_timeline(results_dict, ax=None, show=True, save_path=None):
     """
-    绘制多场景时间线对比
-    
-    参数：
-        results_dict : dict - 多场景仿真结果
-            {scenario_name: result_dict}
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
+    Plot multi-scenario timeline comparison
     """
-    _setup_style()
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(14, 7))
-    
     scenarios = list(results_dict.keys())
     
+    fig = go.Figure()
+    
     for i, (scenario, result) in enumerate(results_dict.items()):
-        time_h = _to_hours(result["time"])
+        time_h = to_hours(result["time"])
         soc_percent = [s * 100 for s in result["SOC"]]
         color = _get_color(scenario, i)
         
-        ax.plot(time_h, soc_percent, color=color, linewidth=2, label=scenario)
+        fig.add_trace(go.Scatter(
+            x=time_h,
+            y=soc_percent,
+            mode='lines',
+            name=scenario,
+            line=dict(color=color, width=LINE_WIDTHS["main"]),
+            hovertemplate=f'{scenario}<br>Time: %{{x:.2f}} h<br>SOC: %{{y:.1f}}%<extra></extra>'
+        ))
     
-    # 关键电量线
-    ax.axhline(y=20, color='orange', linestyle='--', alpha=0.5, label="低电量警告 (20%)")
-    ax.axhline(y=5, color='red', linestyle='--', alpha=0.5, label="极低电量 (5%)")
+    # Critical battery lines
+    fig.add_hline(y=20, line_dash="dash", line_color=COLORS["warning"],
+                  line_width=1, opacity=0.5)
+    fig.add_hline(y=5, line_dash="dash", line_color=COLORS["danger"],
+                  line_width=1, opacity=0.5)
     
-    ax.set_xlabel("时间 (小时)", fontsize=11)
-    ax.set_ylabel("电量 SOC (%)", fontsize=11)
-    ax.set_title("多场景 SOC 变化曲线对比", fontsize=13, fontweight='bold')
-    ax.set_ylim(0, 105)
-    ax.legend(loc='upper right', fontsize=9)
-    ax.grid(True, alpha=0.3)
+    width, height = FIGURE_SIZES["wide"]
+    fig.update_layout(
+        title=dict(text="Multi-Scenario SOC Comparison", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
+        yaxis_title="State of Charge (%)",
+        yaxis=dict(range=[0, 105]),
+        width=width,
+        height=height + 50,
+        legend=dict(
+            font=dict(size=FONT_SIZES["legend"]),
+            x=0.98, y=0.98,
+            xanchor="right", yanchor="top",
+        ),
+        margin=dict(l=50, r=20, t=50, b=45),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="wide")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
 
-def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None, filename=None, subdir="", save_path=None, show=None):
+# =====================================================
+# Comprehensive Scenario Comparison
+# =====================================================
+
+def plot_scenario_comprehensive_comparison(comparison_results, results_dict=None,
+                                            filename=None, subdir="", save_path=None, show=None):
     """
-    绘制场景对比综合图表
-    
-    参数：
-        comparison_results : dict - Monte Carlo 对比结果
-        results_dict : dict - 单次仿真结果（可选）
-        filename : str - 保存文件名
-        subdir : str - 输出子目录
-        save_path : str - 兼容旧接口
-        show : bool - 是否显示图形
+    Plot comprehensive scenario comparison chart
     """
-    _setup_style()
-    
+    scenarios = list(comparison_results.keys())
     has_timeline = results_dict is not None
     
     if has_timeline:
-        fig = plt.figure(figsize=(18, 14))
-        ax1 = fig.add_subplot(2, 2, 1)
-        ax2 = fig.add_subplot(2, 2, 2)
-        ax3 = fig.add_subplot(2, 2, 3)
-        ax4 = fig.add_subplot(2, 2, 4)
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=("Scenario Comparison", "TTL Distribution", "SOC Timeline", "Statistics"),
+            specs=[
+                [{"type": "xy"}, {"type": "xy"}],
+                [{"type": "xy"}, {"type": "table"}],
+            ],
+            vertical_spacing=0.12,
+            horizontal_spacing=0.1,
+        )
     else:
-        fig = plt.figure(figsize=(16, 10))
-        ax1 = fig.add_subplot(2, 2, 1)
-        ax2 = fig.add_subplot(2, 2, 2)
-        ax3 = fig.add_subplot(2, 2, (3, 4))
-        ax4 = None
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=("Scenario Comparison", "TTL Distribution", "Statistics", ""),
+            specs=[
+                [{"type": "xy"}, {"type": "xy"}],
+                [{"type": "table", "colspan": 2}, None],
+            ],
+            vertical_spacing=0.12,
+            horizontal_spacing=0.1,
+        )
     
-    # ===== 柱状图对比 =====
-    plot_scenario_comparison(comparison_results, ax=ax1, show=False)
+    # 1. Bar chart
+    values = [comparison_results[s]["mean"] / 3600 for s in scenarios]
+    errors = [comparison_results[s]["std"] / 3600 for s in scenarios]
+    colors = [_get_color(s, i) for i, s in enumerate(scenarios)]
     
-    # ===== 箱线图分布 =====
-    plot_scenario_boxplot(comparison_results, ax=ax2, show=False)
+    fig.add_trace(go.Bar(
+        x=scenarios, y=values,
+        marker=dict(color=colors),
+        error_y=dict(type='data', array=errors),
+        text=[f'{v:.2f}' for v in values],
+        textposition='outside',
+        showlegend=False,
+    ), row=1, col=1)
+    
+    # 2. Box plot
+    for i, s in enumerate(scenarios):
+        ttl_h = to_hours(comparison_results[s]["ttl_list"])
+        color = _get_color(s, i)
+        
+        fig.add_trace(go.Box(
+            y=ttl_h, name=s,
+            marker=dict(color=color),
+            boxmean='sd',
+            showlegend=False,
+        ), row=1, col=2)
     
     if has_timeline:
-        # ===== 时间线对比 =====
-        plot_multi_scenario_timeline(results_dict, ax=ax3, show=False)
+        # 3. Timeline comparison
+        for i, (scenario, result) in enumerate(results_dict.items()):
+            time_h = to_hours(result["time"])
+            soc_percent = [s * 100 for s in result["SOC"]]
+            color = _get_color(scenario, i)
+            
+            fig.add_trace(go.Scatter(
+                x=time_h, y=soc_percent,
+                mode='lines', name=scenario,
+                line=dict(color=color, width=LINE_WIDTHS["secondary"]),
+                showlegend=True,
+            ), row=2, col=1)
         
-        # ===== 统计表格 =====
-        ax4.axis('off')
+        table_row, table_col = 2, 2
     else:
-        ax3.axis('off')
+        table_row, table_col = 2, 1
     
-    # 构建统计表格（使用纯ASCII边框，兼容性更好）
-    scenarios = list(comparison_results.keys())
-    
-    table_text = """
-    +===============================================================================+
-    |                    [Compare] 场 景 对 比 统 计 表                            |
-    +==================+===========+==========+==========+==========+==============+
-    |      场景        |  均值(h)  | 标准差(h)|  最小(h) |  最大(h) | 相对基准(%)  |
-    +==================+===========+==========+==========+==========+==============+
-"""
-    
-    # 基准（第一个场景）
+    # Statistics table
     baseline_mean = comparison_results[scenarios[0]]["mean"]
     
+    table_scenarios = []
+    table_means = []
+    table_stds = []
+    table_mins = []
+    table_maxs = []
+    table_relatives = []
+    
     for s in scenarios:
-        mean_h = comparison_results[s]["mean"] / 3600
-        std_h = comparison_results[s]["std"] / 3600
-        min_h = comparison_results[s]["min"] / 3600
-        max_h = comparison_results[s]["max"] / 3600
-        relative = (comparison_results[s]["mean"] / baseline_mean - 1) * 100
-        
-        # 根据相对变化添加符号
-        rel_str = f"+{relative:.1f}%" if relative > 0 else f"{relative:.1f}%"
-        
-        table_text += f"    | {s:<16} | {mean_h:>9.2f} | {std_h:>8.2f} | {min_h:>8.2f} | {max_h:>8.2f} | {rel_str:>12} |\n"
+        table_scenarios.append(s)
+        table_means.append(f'{comparison_results[s]["mean"]/3600:.2f}')
+        table_stds.append(f'{comparison_results[s]["std"]/3600:.2f}')
+        table_mins.append(f'{comparison_results[s]["min"]/3600:.2f}')
+        table_maxs.append(f'{comparison_results[s]["max"]/3600:.2f}')
+        rel = (comparison_results[s]["mean"] / baseline_mean - 1) * 100
+        table_relatives.append(f'{rel:+.1f}%')
     
-    table_text += """    +==================+===========+==========+==========+==========+==============+
-"""
+    fig.add_trace(go.Table(
+        header=dict(
+            values=["<b>Scenario</b>", "<b>Mean(h)</b>", "<b>Std</b>", "<b>Min</b>", "<b>Max</b>", "<b>vs Baseline</b>"],
+            fill_color=COLORS["accent"],
+            font=dict(color='white', size=FONT_SIZES["axis_tick"]),
+            align='center', height=24,
+        ),
+        cells=dict(
+            values=[table_scenarios, table_means, table_stds, table_mins, table_maxs, table_relatives],
+            fill_color=['rgba(236, 240, 241, 0.8)'] + ['white'] * 5,
+            font=dict(size=FONT_SIZES["annotation"]),
+            align='center', height=22,
+        )
+    ), row=table_row, col=table_col)
     
-    # 添加洞察
-    best_scenario = max(scenarios, key=lambda s: comparison_results[s]["mean"])
-    worst_scenario = min(scenarios, key=lambda s: comparison_results[s]["mean"])
+    # Layout
+    fig.update_xaxes(tickangle=-15, row=1, col=1)
+    fig.update_yaxes(title_text="TTL (h)", row=1, col=1)
+    fig.update_yaxes(title_text="TTL (h)", row=1, col=2)
     
-    insights = f"""
+    if has_timeline:
+        fig.update_xaxes(title_text="Time (h)", row=2, col=1)
+        fig.update_yaxes(title_text="SOC (%)", range=[0, 105], row=2, col=1)
     
-    [Key] 关键洞察:
+    width, height = FIGURE_SIZES["composite"]
+    fig.update_layout(
+        title=dict(text="Usage Scenario Comparison Report", font=dict(size=FONT_SIZES["title"])),
+        width=width + 100,
+        height=height,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.08,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=FONT_SIZES["legend"]),
+        ),
+        margin=dict(l=50, r=20, t=60, b=70),
+    )
     
-    * 最佳续航场景: {best_scenario} ({comparison_results[best_scenario]["mean"]/3600:.2f} 小时)
-    * 最差续航场景: {worst_scenario} ({comparison_results[worst_scenario]["mean"]/3600:.2f} 小时)
-    * 最大续航差异: {(comparison_results[best_scenario]["mean"] - comparison_results[worst_scenario]["mean"])/3600:.2f} 小时
-    """
-    
-    table_text += insights
-    
-    target_ax = ax4 if has_timeline else ax3
-    target_ax.text(0.05, 0.5, table_text, transform=target_ax.transAxes, fontsize=9,
-                   verticalalignment='center',
-                   bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
-    
-    # 总标题
-    fig.suptitle("[Scenario] 使用场景对比分析报告", fontsize=16, fontweight='bold', y=1.02)
-    
-    plt.tight_layout()
-    
-    if filename:
-        smart_savefig(filename, subdir)
-    elif save_path:
-        smart_savefig(save_path)
+    path = filename or save_path
+    if path:
+        save_plotly_figure(fig, path, subdir, size_type="composite")
     
     if show is None:
         show = get_show_plots()
     if show:
-        plt.show()
+        fig.show()
     
     return fig

@@ -1,99 +1,130 @@
 # visualization/timeseries.py
-# 单次仿真时间序列可视化模块
+# Time Series Visualization Module (Plotly - Single Column Paper Optimized)
 #
-# 提供丰富的时间序列可视化功能：
-# - SOC 曲线
-# - 功耗曲线
-# - 温度曲线
-# - 使用状态时间线
-# - 综合仪表板
+# Professional time series visualizations:
+# - SOC Curve
+# - Power Curve
+# - Temperature Curve
+# - Usage State Timeline
+# - Composite Charts
 
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import numpy as np
-from matplotlib.gridspec import GridSpec
 
-# 从统一配置模块导入
 from .config import (
-    setup_style as _setup_style,
-    COLORS,
-    STATE_COLORS,
-    to_hours as _to_hours,
-    save_figure,
-    get_save_path,
-    smart_savefig,
-    get_show_plots,
+    COLORS, STATE_COLORS, DEFAULT_COLORS, POWER_BREAKDOWN_COLORS,
+    FONT_SIZES, LINE_WIDTHS, FIGURE_SIZES,
+    to_hours, get_show_plots, save_plotly_figure,
+    hex_to_rgba,
+    setup_style,
 )
+
+# 确保样式已初始化
+setup_style()
 
 
 # =====================================================
-# 单独曲线绘制函数
+# SOC 曲线
 # =====================================================
 
 def plot_soc_curve(result, ax=None, show=True, save_path=None):
     """
-    绘制 SOC（电量）随时间变化曲线
+    Plot SOC (State of Charge) over time
     
-    参数：
-        result : dict - 仿真结果
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
+    Parameters:
+        result : dict - Simulation result
+        ax : Compatibility parameter (ignored)
+        show : bool - Whether to display the figure
+        save_path : str - Save path
+    
+    Returns:
+        plotly.graph_objects.Figure
     """
-    _setup_style()
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 5))
-    
-    time_h = _to_hours(result["time"])
+    time_h = to_hours(result["time"])
     soc_percent = [s * 100 for s in result["SOC"]]
     
-    # 主曲线
-    ax.plot(time_h, soc_percent, color=COLORS["primary"], linewidth=2, label="SOC")
+    fig = go.Figure()
     
-    # 关键电量线
-    ax.axhline(y=20, color=COLORS["success"], linestyle='--', alpha=0.7, label="低电量警告 (20%)")
-    ax.axhline(y=5, color='red', linestyle='--', alpha=0.7, label="极低电量 (5%)")
+    # Main SOC curve
+    fig.add_trace(go.Scatter(
+        x=time_h,
+        y=soc_percent,
+        mode='lines',
+        name='Battery SOC',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        fill='tozeroy',
+        fillcolor='rgba(8, 145, 178, 0.15)',
+        hovertemplate='Time: %{x:.2f} h<br>SOC: %{y:.1f}%<extra></extra>'
+    ))
     
-    # 填充区域
-    ax.fill_between(time_h, soc_percent, alpha=0.3, color=COLORS["primary"])
+    # Low battery warning line
+    fig.add_hline(
+        y=20, line_dash="dash", line_color=COLORS["warning"],
+        line_width=LINE_WIDTHS["secondary"],
+        annotation_text="Low Battery (20%)",
+        annotation_position="top right",
+        annotation_font_size=FONT_SIZES["annotation"],
+    )
     
-    ax.set_xlabel("时间 (小时)", fontsize=11)
-    ax.set_ylabel("电量 SOC (%)", fontsize=11)
-    ax.set_title("电池电量变化曲线", fontsize=13, fontweight='bold')
-    ax.set_ylim(0, 105)
-    ax.set_xlim(0, max(time_h))
-    ax.legend(loc='upper right', fontsize=9)
-    ax.grid(True, alpha=0.3)
+    # Critical battery warning line
+    fig.add_hline(
+        y=5, line_dash="dot", line_color=COLORS["danger"],
+        line_width=LINE_WIDTHS["secondary"],
+        annotation_text="Critical (5%)",
+        annotation_position="bottom right",
+        annotation_font_size=FONT_SIZES["annotation"],
+    )
+    
+    # Layout
+    width, height = FIGURE_SIZES["wide"]
+    fig.update_layout(
+        title=dict(text="Battery SOC Over Time", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
+        yaxis_title="State of Charge (%)",
+        yaxis=dict(range=[0, 105]),
+        xaxis=dict(range=[0, max(time_h)]),
+        width=width,
+        height=height,
+        showlegend=False,
+        margin=dict(l=50, r=20, t=45, b=45),
+    )
+    
+    # Add TTL annotation
+    ttl_hours = result["TTL"] / 3600
+    fig.add_annotation(
+        x=0.98, y=0.95, xref="paper", yref="paper",
+        text=f"<b>TTL: {ttl_hours:.2f} h</b>",
+        showarrow=False,
+        font=dict(size=FONT_SIZES["annotation"]),
+        bgcolor="rgba(255,255,255,0.9)",
+        bordercolor=COLORS["neutral"],
+        borderwidth=1,
+        borderpad=3,
+        xanchor="right", yanchor="top",
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="wide")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# 功耗曲线
+# =====================================================
 
 def plot_power_curve(result, ax=None, show=True, save_path=None):
     """
-    绘制功耗随时间变化曲线
-    
-    参数：
-        result : dict - 仿真结果
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
+    Plot power consumption over time
     """
-    _setup_style()
+    time_h = to_hours(result["time"])
+    power = np.array(result["Power"])
     
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 5))
-    
-    time_h = _to_hours(result["time"])
-    power = result["Power"]
-    
-    # 计算滑动平均（平滑曲线）
+    # Calculate moving average
     window_size = min(100, len(power) // 10) if len(power) > 100 else 1
     if window_size > 1:
         power_smooth = np.convolve(power, np.ones(window_size)/window_size, mode='valid')
@@ -102,746 +133,679 @@ def plot_power_curve(result, ax=None, show=True, save_path=None):
         power_smooth = power
         time_smooth = time_h
     
-    # 原始数据（半透明）
-    ax.plot(time_h, power, color=COLORS["neutral"], alpha=0.3, linewidth=0.5, label="瞬时功耗")
+    fig = go.Figure()
     
-    # 平滑曲线
-    ax.plot(time_smooth, power_smooth, color=COLORS["accent"], linewidth=2, label="平滑功耗")
+    # Instantaneous power (semi-transparent)
+    fig.add_trace(go.Scatter(
+        x=time_h,
+        y=power,
+        mode='lines',
+        name='Instantaneous',
+        line=dict(color=COLORS["neutral"], width=0.5),
+        opacity=0.3,
+        hoverinfo='skip',
+    ))
     
-    # 平均功耗线
+    # Smoothed power curve
+    fig.add_trace(go.Scatter(
+        x=time_smooth,
+        y=power_smooth,
+        mode='lines',
+        name='Smoothed',
+        line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
+        hovertemplate='Time: %{x:.2f} h<br>Power: %{y:.3f} W<extra></extra>'
+    ))
+    
+    # Average power line
     avg_power = np.mean(power)
-    ax.axhline(y=avg_power, color=COLORS["secondary"], linestyle='--', alpha=0.8, 
-               label=f"平均功耗: {avg_power:.2f} W")
+    fig.add_hline(
+        y=avg_power, line_dash="dash", line_color=COLORS["accent"],
+        line_width=LINE_WIDTHS["secondary"],
+        annotation_text=f"Avg: {avg_power:.2f} W",
+        annotation_position="top right",
+        annotation_font_size=FONT_SIZES["annotation"],
+    )
     
-    ax.set_xlabel("时间 (小时)", fontsize=11)
-    ax.set_ylabel("功耗 (W)", fontsize=11)
-    ax.set_title("系统功耗变化曲线", fontsize=13, fontweight='bold')
-    ax.set_xlim(0, max(time_h))
-    ax.legend(loc='upper right', fontsize=9)
-    ax.grid(True, alpha=0.3)
+    width, height = FIGURE_SIZES["wide"]
+    fig.update_layout(
+        title=dict(text="System Power Consumption", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
+        yaxis_title="Power (W)",
+        xaxis=dict(range=[0, max(time_h)]),
+        width=width,
+        height=height,
+        showlegend=False,
+        margin=dict(l=50, r=20, t=45, b=45),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="wide")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# 温度曲线
+# =====================================================
 
 def plot_temperature_curve(result, ax=None, show=True, save_path=None, T_amb=298.15):
     """
-    绘制温度随时间变化曲线
-    
-    参数：
-        result : dict - 仿真结果
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
-        T_amb : float - 环境温度（K）
+    Plot battery temperature over time
     """
-    _setup_style()
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 5))
-    
-    time_h = _to_hours(result["time"])
-    temp_c = [tb - 273.15 for tb in result["Tb"]]  # 转换为摄氏度
+    time_h = to_hours(result["time"])
+    temp_c = [tb - 273.15 for tb in result["Tb"]]
     T_amb_c = T_amb - 273.15
     
-    # 温度曲线
-    ax.plot(time_h, temp_c, color=COLORS["success"], linewidth=2, label="电池温度")
+    fig = go.Figure()
     
-    # 环境温度参考线
-    ax.axhline(y=T_amb_c, color=COLORS["neutral"], linestyle='--', alpha=0.7, 
-               label=f"环境温度: {T_amb_c:.1f}°C")
+    # Temperature curve
+    fig.add_trace(go.Scatter(
+        x=time_h,
+        y=temp_c,
+        mode='lines',
+        name='Battery Temp',
+        line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
+        fill='tonexty',
+        fillcolor='rgba(220, 38, 38, 0.12)',
+        hovertemplate='Time: %{x:.2f} h<br>Temp: %{y:.1f}°C<extra></extra>'
+    ))
     
-    # 高温警告线
-    ax.axhline(y=45, color='red', linestyle=':', alpha=0.7, label="高温警告 (45°C)")
+    # Ambient temperature reference line
+    fig.add_hline(
+        y=T_amb_c, line_dash="dash", line_color=COLORS["neutral"],
+        line_width=LINE_WIDTHS["secondary"],
+        annotation_text=f"Ambient: {T_amb_c:.1f}°C",
+        annotation_position="bottom right",
+        annotation_font_size=FONT_SIZES["annotation"],
+    )
     
-    # 温度区域填充
-    ax.fill_between(time_h, T_amb_c, temp_c, alpha=0.2, color=COLORS["success"])
+    # High temperature warning line
+    fig.add_hline(
+        y=45, line_dash="dot", line_color=COLORS["danger"],
+        line_width=LINE_WIDTHS["secondary"],
+        annotation_text="Warning (45°C)",
+        annotation_position="top right",
+        annotation_font_size=FONT_SIZES["annotation"],
+    )
     
-    ax.set_xlabel("时间 (小时)", fontsize=11)
-    ax.set_ylabel("温度 (°C)", fontsize=11)
-    ax.set_title("电池温度变化曲线", fontsize=13, fontweight='bold')
-    ax.set_xlim(0, max(time_h))
-    ax.legend(loc='upper right', fontsize=9)
-    ax.grid(True, alpha=0.3)
+    width, height = FIGURE_SIZES["wide"]
+    fig.update_layout(
+        title=dict(text="Battery Temperature Over Time", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
+        yaxis_title="Temperature (°C)",
+        xaxis=dict(range=[0, max(time_h)]),
+        width=width,
+        height=height,
+        showlegend=False,
+        margin=dict(l=50, r=20, t=45, b=45),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="wide")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# 状态时间线
+# =====================================================
 
 def plot_state_timeline(result, ax=None, show=True, save_path=None):
     """
-    绘制使用状态时间线图
-    
-    参数：
-        result : dict - 仿真结果
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
+    Plot usage state timeline
     """
-    _setup_style()
-    
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(12, 3))
-    
-    time_h = _to_hours(result["time"])
+    time_h = to_hours(result["time"])
     states = result["State"]
     
-    # 将状态转换为数值用于绘制
-    unique_states = list(set(states))
-    state_to_num = {s: i for i, s in enumerate(unique_states)}
-    
-    # 绘制状态色块
-    prev_state = states[0]
-    start_time = time_h[0]
-    labeled_states = set()  # 使用集合跟踪已标注的状态
-    
-    for i, (t, state) in enumerate(zip(time_h, states)):
-        if state != prev_state or i == len(states) - 1:
-            color = STATE_COLORS.get(prev_state, COLORS["neutral"])
-            # 使用集合进行 O(1) 查找
-            label = prev_state if prev_state not in labeled_states else ""
-            ax.axvspan(start_time, t, alpha=0.7, color=color, label=label)
-            if label:
-                labeled_states.add(prev_state)
-            start_time = t
-            prev_state = state
-    
-    # 创建图例
-    handles = [mpatches.Patch(color=STATE_COLORS.get(s, COLORS["neutral"]), label=s) 
-               for s in unique_states]
-    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.15), 
-              ncol=len(unique_states), fontsize=9)
-    
-    ax.set_xlabel("时间 (小时)", fontsize=11)
-    ax.set_ylabel("使用状态", fontsize=11)
-    ax.set_title("手机使用状态时间线", fontsize=13, fontweight='bold')
-    ax.set_xlim(0, max(time_h))
-    ax.set_yticks([])
-    
-    if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
-    
-    return ax
-
-
-def plot_single_run(result, filename=None, subdir="", save_path=None, show=None):
-    """
-    绘制单次仿真的基础图表（SOC + 功耗）
-    
-    参数：
-        result : dict - 仿真结果
-        filename : str - 保存文件名
-        subdir : str - 输出子目录
-        save_path : str - 完整保存路径（兼容旧接口）
-        show : bool - 是否显示图形，None 则使用全局设置
-    """
-    _setup_style()
-    
-    fig, axes = plt.subplots(2, 1, figsize=(12, 8))
-    
-    # SOC 曲线
-    plot_soc_curve(result, ax=axes[0], show=False)
-    
-    # 功耗曲线
-    plot_power_curve(result, ax=axes[1], show=False)
-    
-    # 添加总标题
-    ttl_hours = result["TTL"] / 3600
-    fig.suptitle(f"电池仿真结果 | 续航时间 TTL = {ttl_hours:.2f} 小时", 
-                 fontsize=14, fontweight='bold', y=1.02)
-    
-    plt.tight_layout()
-    
-    # 保存图片
-    if filename:
-        smart_savefig(filename, subdir)
-    elif save_path:
-        smart_savefig(save_path)
-    
-    # 使用参数或全局设置决定是否显示
-    if show is None:
-        show = get_show_plots()
-    if show:
-        plt.show()
-    
-    return fig
-
-
-def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15, show=None):
-    """
-    绘制综合仪表板（比赛级别可视化）
-    
-    包含：
-    - SOC 曲线
-    - 功耗曲线
-    - 温度曲线
-    - 状态时间线
-    - 统计信息面板
-    
-    参数：
-        result : dict - 仿真结果
-        save_path : str - 保存路径
-        T_amb : float - 环境温度（K）
-        show : bool - 是否显示图形，None 则使用全局设置
-    """
-    _setup_style()
-    
-    fig = plt.figure(figsize=(16, 12))
-    gs = GridSpec(4, 4, figure=fig, height_ratios=[2, 2, 2, 1], hspace=0.3, wspace=0.3)
-    
-    # ===== SOC 曲线 (左上) =====
-    ax1 = fig.add_subplot(gs[0, :3])
-    plot_soc_curve(result, ax=ax1, show=False)
-    
-    # ===== 统计信息面板 (右上) =====
-    ax_stats = fig.add_subplot(gs[0, 3])
-    ax_stats.axis('off')
-    
-    # 计算统计信息
-    ttl_hours = result["TTL"] / 3600
-    avg_power = np.mean(result["Power"])
-    max_power = np.max(result["Power"])
-    min_power = np.min(result["Power"])
-    avg_temp = np.mean(result["Tb"]) - 273.15
-    max_temp = np.max(result["Tb"]) - 273.15
-    
-    # 统计文本（使用纯ASCII边框，兼容性更好）
-    stats_text = f"""
-    +-------------------------+
-    |   仿 真 统 计 摘 要     |
-    +-------------------------+
-    |  续航时间:  {ttl_hours:>6.2f} h   |
-    |                         |
-    |  平均功耗:  {avg_power:>6.2f} W   |
-    |  最大功耗:  {max_power:>6.2f} W   |
-    |  最小功耗:  {min_power:>6.2f} W   |
-    |                         |
-    |  平均温度:  {avg_temp:>6.1f} °C  |
-    |  最高温度:  {max_temp:>6.1f} °C  |
-    +-------------------------+
-    """
-    ax_stats.text(0.1, 0.5, stats_text, transform=ax_stats.transAxes, fontsize=10,
-                  verticalalignment='center',
-                  bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-    
-    # ===== 功耗曲线 (中左) =====
-    ax2 = fig.add_subplot(gs[1, :3])
-    plot_power_curve(result, ax=ax2, show=False)
-    
-    # ===== 功耗分布饼图 (中右) =====
-    ax_pie = fig.add_subplot(gs[1, 3])
-    states = result["State"]
-    powers = result["Power"]
-    
-    # 按状态计算总能耗
-    state_energy = {}
-    for state, power in zip(states, powers):
-        if state not in state_energy:
-            state_energy[state] = 0
-        state_energy[state] += power  # 假设 dt=1s
-    
-    labels = list(state_energy.keys())
-    sizes = list(state_energy.values())
-    colors = [STATE_COLORS.get(s, COLORS["neutral"]) for s in labels]
-    
-    ax_pie.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
-    ax_pie.set_title("各状态能耗占比", fontsize=11, fontweight='bold')
-    
-    # ===== 温度曲线 (下左) =====
-    ax3 = fig.add_subplot(gs[2, :3])
-    plot_temperature_curve(result, ax=ax3, show=False, T_amb=T_amb)
-    
-    # ===== 状态时间占比条形图 (下右) =====
-    ax_bar = fig.add_subplot(gs[2, 3])
-    
-    # 计算状态时间占比
-    from collections import Counter
-    state_counts = Counter(states)
-    total = sum(state_counts.values())
-    state_ratios = {k: v/total*100 for k, v in state_counts.items()}
-    
-    bars = ax_bar.barh(list(state_ratios.keys()), list(state_ratios.values()),
-                       color=[STATE_COLORS.get(s, COLORS["neutral"]) for s in state_ratios.keys()])
-    ax_bar.set_xlabel("时间占比 (%)", fontsize=10)
-    ax_bar.set_title("状态时间分布", fontsize=11, fontweight='bold')
-    
-    # ===== 状态时间线 (底部) =====
-    ax4 = fig.add_subplot(gs[3, :])
-    plot_state_timeline(result, ax=ax4, show=False)
-    
-    # ===== 总标题 =====
-    fig.suptitle(f"[Battery] 电池仿真综合仪表板 | 续航时间: {ttl_hours:.2f} 小时", 
-                 fontsize=16, fontweight='bold', y=0.98)
-    
-    plt.tight_layout()
-    
-    if save_path:
-        smart_savefig(save_path)
-    
-    # 使用参数或全局设置决定是否显示
-    if show is None:
-        show = get_show_plots()
-    if show:
-        plt.show()
-    
-    return fig
-
-
-# =====================================================
-# 复合图表1：温度 + 功耗堆叠图 + 状态时间线（改进版：不拥挤、更协调）
-# =====================================================
-
-def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=None):
-    """
-    绘制复合图表：温度变化曲线 + 子模块功耗堆叠图 + 使用状态时间线
-
-    改进点：
-    - 去除 emoji（避免 SimHei 缺字形警告）
-    - 堆叠图使用低饱和配色 + 白色细分隔线，层次更清晰
-    - 堆叠图图例外置，减少图内拥挤
-    - 平均功耗线不进入 legend，改用右上角注释
-    - 适度弱化网格/边框，整体更协调
-    """
-    _setup_style()
-
-    # 创建图表布局（温度:功耗:状态 = 1.6:2.8:0.8），更协调
-    fig = plt.figure(figsize=(14, 10))
-    gs = GridSpec(3, 1, figure=fig, height_ratios=[1.6, 2.8, 0.8], hspace=0.22)
-
-    time_h = _to_hours(result["time"])
-
-    # ===== 面板1：温度曲线 =====
-    ax1 = fig.add_subplot(gs[0])
-    temp_c = [tb - 273.15 for tb in result["Tb"]]  # K -> °C
-    T_amb_c = T_amb - 273.15
-
-    ax1.plot(time_h, temp_c, color=COLORS["danger"], linewidth=2.2, label="电池温度")
-    ax1.axhline(
-        y=T_amb_c,
-        color=COLORS["neutral"],
-        linestyle="--",
-        alpha=0.75,
-        linewidth=1.4,
-        label=f"环境温度: {T_amb_c:.1f}°C",
-    )
-
-    # 高温警告线 + 轻微背景提示
-    ax1.axhline(y=45, color="red", linestyle=":", alpha=0.55, linewidth=1.4, label="高温警告 (45°C)")
-    ax1.axhspan(45, max(50, max(temp_c) + 2), alpha=0.08, color="red")
-
-    ax1.fill_between(time_h, T_amb_c, temp_c, alpha=0.18, color=COLORS["danger"])
-
-    ax1.set_ylabel("温度 (°C)", fontsize=12, fontweight="bold")
-    ax1.set_title("电池温度变化", fontsize=12.5, fontweight="bold", loc="left")
-    ax1.legend(loc="upper right", fontsize=9, framealpha=0.9)
-    ax1.grid(True, alpha=0.18, linestyle="-")
-    ax1.set_xlim(0, max(time_h))
-    ax1.set_xticklabels([])  # 隐藏 x 轴标签
-
-    # 弱化边框
-    ax1.spines["top"].set_visible(False)
-    ax1.spines["right"].set_visible(False)
-
-    # ===== 面板2：功耗堆叠图 =====
-    ax2 = fig.add_subplot(gs[1])
-
-    has_breakdown = "Power_screen" in result
-
-    if has_breakdown:
-        p_screen = np.array(result["Power_screen"])
-        p_cpu = np.array(result["Power_cpu"])
-        p_radio = np.array(result["Power_radio"])
-        p_gps = np.array(result["Power_gps"])
-        p_bg = np.array(result["Power_background"])
-
-        # 低饱和、论文友好配色
-        colors_stack = {
-            "屏幕":   "#B7BBBF",  # 深灰蓝
-            "GPS":    "#DEB846",  # 深金黄
-            "无线通信": "#6DB3DC",  # 深青蓝
-            "CPU":    "#3DC287",  # 深墨绿
-            "后台":   "#845057",  # 深酒红
-        }
-
-        # 固定堆叠顺序：底噪 -> 少量 -> 变化中等 -> 峰值（读图更自然）
-        layers = [p_bg, p_gps, p_radio, p_cpu, p_screen]
-        labels = ["后台", "GPS", "无线通信", "CPU", "屏幕"]
-        colors = [colors_stack[k] for k in labels]
-
-        # 堆叠面积图：加白色细分隔线，层次立刻清晰
-        ax2.stackplot(
-            time_h,
-            *layers,
-            labels=labels,
-            colors=colors,
-            alpha=0.75,
-            linewidth=0.6,
-            edgecolor="white",
-        )
-
-        # 总功耗轮廓线（细一些，避免喧宾夺主）
-        total_power_arr = p_screen + p_cpu + p_radio + p_gps + p_bg
-        ax2.plot(
-            time_h,
-            total_power_arr,
-            color="black",
-            linewidth=1.2,
-            linestyle="-",
-            alpha=0.65,
-            label="总功耗",
-        )
-
-        # 平均功耗：不进 legend，用注释显示，减少拥挤
-        avg_power = float(np.mean(total_power_arr))
-        ax2.axhline(avg_power, color="black", linestyle="--", linewidth=1.6, alpha=0.75)
-        ax2.text(
-            0.99,
-            0.93,
-            f"平均功耗: {avg_power:.2f} W",
-            transform=ax2.transAxes,
-            ha="right",
-            va="top",
-            fontsize=9,
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none", pad=2.5),
-        )
-
-        # 图例外置到右侧
-        ax2.legend(
-            loc="upper left",
-            bbox_to_anchor=(1.01, 1.0),
-            frameon=False,
-            fontsize=9,
-        )
-
-        # 给右侧图例留空间
-        fig.subplots_adjust(right=0.82)
-
-    else:
-        power = np.array(result["Power"])
-
-        ax2.fill_between(time_h, 0, power, alpha=0.45, color=COLORS["accent"])
-        ax2.plot(time_h, power, color=COLORS["accent"], linewidth=1.6)
-
-        avg_power = float(np.mean(power))
-        ax2.axhline(avg_power, color="black", linestyle="--", linewidth=1.6, alpha=0.75)
-        ax2.text(
-            0.99,
-            0.93,
-            f"平均功耗: {avg_power:.2f} W",
-            transform=ax2.transAxes,
-            ha="right",
-            va="top",
-            fontsize=9,
-            bbox=dict(facecolor="white", alpha=0.75, edgecolor="none", pad=2.5),
-        )
-
-        ax2.set_xlim(0, max(time_h))
-
-    ax2.set_ylabel("功耗 (W)", fontsize=12, fontweight="bold")
-    ax2.set_title("系统功耗分解（堆叠）", fontsize=12.5, fontweight="bold", loc="left")
-    ax2.grid(True, alpha=0.18, linestyle="-")
-    ax2.set_xlim(0, max(time_h))
-    ax2.set_ylim(0, None)
-    ax2.set_xticklabels([])
-
-    ax2.spines["top"].set_visible(False)
-    ax2.spines["right"].set_visible(False)
-
-    # ===== 面板3：状态时间线 =====
-    ax3 = fig.add_subplot(gs[2])
-
-    states = result["State"]
-
-    # 保持状态出现顺序（避免 set() 导致顺序随机）
+    # Preserve state appearance order
     unique_states = []
     for s in states:
         if s not in unique_states:
             unique_states.append(s)
-
+    
+    fig = go.Figure()
+    
+    # Plot state segments
     prev_state = states[0]
     start_time = time_h[0]
-    labeled_states = set()
+    state_spans = []
+    
+    for i, (t, state) in enumerate(zip(time_h, states)):
+        is_last = (i == len(states) - 1)
+        if state != prev_state or is_last:
+            end_t = t if not is_last else time_h[-1]
+            state_spans.append((prev_state, start_time, end_t))
+            start_time = t
+            prev_state = state
+    
+    # Draw color blocks
+    for state, start_t, end_t in state_spans:
+        color = STATE_COLORS.get(state, COLORS["neutral"])
+        fig.add_shape(
+            type="rect",
+            x0=start_t, x1=end_t, y0=0, y1=1,
+            fillcolor=color,
+            opacity=0.85,
+            line_width=0,
+        )
+    
+    # Add legend
+    for state in unique_states:
+        color = STATE_COLORS.get(state, COLORS["neutral"])
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None],
+            mode='markers',
+            marker=dict(size=12, color=color, symbol='square'),
+            name=state,
+            showlegend=True,
+        ))
+    
+    width, height = FIGURE_SIZES["timeline"]
+    fig.update_layout(
+        title=dict(text="Usage State Timeline", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="Time (hours)",
+        xaxis=dict(range=[0, max(time_h)]),
+        yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+        width=width,
+        height=height,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.5,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=FONT_SIZES["legend"]),
+        ),
+        margin=dict(l=50, r=20, t=45, b=60),
+    )
+    
+    if save_path:
+        save_plotly_figure(fig, save_path, size_type="timeline")
+    
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# 单次仿真基础图表
+# =====================================================
+
+def plot_single_run(result, filename=None, subdir="", save_path=None, show=None):
+    """
+    Plot basic charts for a single simulation run (SOC + Power)
+    """
+    fig = make_subplots(
+        rows=2, cols=1,
+        subplot_titles=("Battery SOC", "System Power"),
+        vertical_spacing=0.12,
+    )
+    
+    time_h = to_hours(result["time"])
+    soc_percent = [s * 100 for s in result["SOC"]]
+    power = np.array(result["Power"])
+    
+    # SOC curve
+    fig.add_trace(go.Scatter(
+        x=time_h, y=soc_percent,
+        mode='lines', name='SOC',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        fill='tozeroy',
+        fillcolor='rgba(8, 145, 178, 0.15)',
+        showlegend=False,
+    ), row=1, col=1)
+    
+    fig.add_hline(y=20, line_dash="dash", line_color=COLORS["warning"],
+                  line_width=1, row=1, col=1)
+    
+    # Power curve (smoothed)
+    window_size = min(100, len(power) // 10) if len(power) > 100 else 1
+    if window_size > 1:
+        power_smooth = np.convolve(power, np.ones(window_size)/window_size, mode='valid')
+        time_smooth = time_h[:len(power_smooth)]
+    else:
+        power_smooth = power
+        time_smooth = time_h
+    
+    fig.add_trace(go.Scatter(
+        x=time_smooth, y=power_smooth,
+        mode='lines', name='Power',
+        line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
+        showlegend=False,
+    ), row=2, col=1)
+    
+    avg_power = np.mean(power)
+    fig.add_hline(y=avg_power, line_dash="dash", line_color=COLORS["accent"],
+                  line_width=1, row=2, col=1)
+    
+    # Update layout
+    ttl_hours = result["TTL"] / 3600
+    width, height = FIGURE_SIZES["tall"]
+    
+    fig.update_layout(
+        title=dict(
+            text=f"Battery Simulation Results | TTL: {ttl_hours:.2f} hours",
+            font=dict(size=FONT_SIZES["title"]),
+        ),
+        width=width,
+        height=height,
+        margin=dict(l=50, r=20, t=60, b=45),
+    )
+    
+    fig.update_xaxes(title_text="Time (hours)", row=2, col=1)
+    fig.update_yaxes(title_text="SOC (%)", range=[0, 105], row=1, col=1)
+    fig.update_yaxes(title_text="Power (W)", row=2, col=1)
+    
+    path = filename or save_path
+    if path:
+        save_plotly_figure(fig, path, subdir, size_type="tall")
+    
+    if show is None:
+        show = get_show_plots()
+    if show:
+        fig.show()
+    
+    return fig
+
+
+# =====================================================
+# Comprehensive Dashboard (Interface compatibility)
+# =====================================================
+
+def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15, show=None):
+    """
+    Plot comprehensive charts (multiple independent subplots)
+    Maintains interface compatibility, actually plots multiple separate charts
+    """
+    # Directly call plot_single_run
+    return plot_single_run(result, save_path=save_path, show=show)
+
+
+# =====================================================
+# Composite Chart: System Analysis (Temperature + Power Breakdown + State Timeline)
+# Design philosophy: Compact, integrated, paper-quality system analysis
+# =====================================================
+
+def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=None):
+    """
+    Plot system analysis composite chart: Temperature + Power Breakdown + State Timeline
+    
+    Design features:
+    - Shared time axis, compact vertical layout
+    - Temperature chart: line + light fill + threshold lines
+    - Power chart: stacked area + boundary lines
+    - State chart: pure color blocks, minimal cognitive load
+    - Legends distributed in respective subplot areas
+    - Bright, high-contrast color scheme
+    """
+    time_h = np.array(to_hours(result["time"]))
+    temp_c = np.array([tb - 273.15 for tb in result["Tb"]])
+    T_amb_c = T_amb - 273.15
+    states = result["State"]
+    ttl_hours = result["TTL"] / 3600
+    max_time = max(time_h)
+    
+    # Create compact subplot layout
+    fig = make_subplots(
+        rows=3, cols=1,
+        row_heights=[0.38, 0.48, 0.14],
+        vertical_spacing=0.02,
+        shared_xaxes=True,
+    )
+    
+    # ========== 1. Temperature Curve (line + light fill + threshold) ==========
+    
+    # Ambient temperature reference fill (very light)
+    fig.add_trace(go.Scatter(
+        x=time_h, y=[T_amb_c] * len(time_h),
+        mode='lines', name='',
+        line=dict(width=0),
+        showlegend=False,
+        hoverinfo='skip',
+    ), row=1, col=1)
+    
+    # Battery temperature curve (with light fill to ambient)
+    fig.add_trace(go.Scatter(
+        x=time_h, y=temp_c,
+        mode='lines', name='Battery Temp',
+        line=dict(color=COLORS["secondary"], width=2.0),
+        fill='tonexty',
+        fillcolor=hex_to_rgba(COLORS["secondary"], 0.12),
+        showlegend=False,
+    ), row=1, col=1)
+    
+    # Ambient temperature reference line (dashed)
+    fig.add_hline(
+        y=T_amb_c, line_dash="dash", line_color=COLORS["neutral"],
+        line_width=1.0, row=1, col=1,
+    )
+    # Ambient temperature annotation (dynamic offset)
+    temp_range = max(temp_c) - min(temp_c) if max(temp_c) > min(temp_c) else 5
+    annotation_offset = max(temp_range * 0.05, 0.5)
+    fig.add_trace(go.Scatter(
+        x=[max_time * 0.03], y=[T_amb_c + annotation_offset],
+        mode='text',
+        text=[f'Ambient {T_amb_c:.0f}°C'],
+        textfont=dict(size=7, color=COLORS["neutral"]),
+        textposition='middle right',
+        showlegend=False,
+        hoverinfo='skip',
+    ), row=1, col=1)
+    
+    # High temperature warning line (45°C)
+    TEMP_THRESHOLD = 45
+    if max(temp_c) > 40:
+        fig.add_hline(
+            y=TEMP_THRESHOLD, line_dash="dot", line_color=COLORS["danger"],
+            line_width=1.0, row=1, col=1,
+        )
+        fig.add_trace(go.Scatter(
+            x=[max_time * 0.03], y=[TEMP_THRESHOLD + annotation_offset],
+            mode='text',
+            text=[f'Warning {TEMP_THRESHOLD}°C'],
+            textfont=dict(size=7, color=COLORS["danger"]),
+            textposition='middle right',
+            showlegend=False,
+            hoverinfo='skip',
+        ), row=1, col=1)
+    
+    # ========== 2. Power Breakdown (stacked area + boundary lines) ==========
+    
+    has_breakdown = "Power_screen" in result
+    
+    if has_breakdown:
+        # Stack order: bottom to top
+        layers = [
+            ("Background", result["Power_background"]),
+            ("GPS", result["Power_gps"]),
+            ("Radio", result["Power_radio"]),
+            ("CPU", result["Power_cpu"]),
+            ("Screen", result["Power_screen"]),
+        ]
+        
+        # Line styles (differentiate by boundary lines, not just color)
+        line_styles = {
+            "Background": dict(width=0.8, color="#7C3AED", dash="dot"),
+            "GPS": dict(width=0.8, color="#EA580C"),
+            "Radio": dict(width=0.8, color="#D97706"),
+            "CPU": dict(width=0.8, color="#059669"),
+            "Screen": dict(width=1.0, color="#2563EB"),
+        }
+        
+        for name, data in layers:
+            fig.add_trace(go.Scatter(
+                x=time_h, y=data,
+                mode='lines', name=name,
+                stackgroup='power',
+                fillcolor=hex_to_rgba(POWER_BREAKDOWN_COLORS[name], 0.75),
+                line=line_styles[name],
+                showlegend=False,
+            ), row=2, col=1)
+        
+        total_power = (np.array(result["Power_screen"]) +
+                      np.array(result["Power_cpu"]) +
+                      np.array(result["Power_radio"]) +
+                      np.array(result["Power_gps"]) +
+                      np.array(result["Power_background"]))
+        avg_power = np.mean(total_power)
+        max_power = np.max(total_power)
+        
+        # Power module legend position configuration
+        LEGEND_START_Y = 0.92
+        LEGEND_SPACING = 0.12
+        LEGEND_X_POS = 0.88
+        
+        layer_names = ["Screen", "CPU", "Radio", "GPS", "Bkgnd"]
+        layer_full = ["Screen", "CPU", "Radio", "GPS", "Background"]
+        for i, (name, full_name) in enumerate(zip(layer_names, layer_full)):
+            y_pos = max_power * (LEGEND_START_Y - i * LEGEND_SPACING)
+            fig.add_trace(go.Scatter(
+                x=[max_time * LEGEND_X_POS], y=[y_pos],
+                mode='text',
+                text=[f'■{name}'],
+                textfont=dict(size=7, color=POWER_BREAKDOWN_COLORS[full_name]),
+                textposition='middle right',
+                showlegend=False,
+                hoverinfo='skip',
+            ), row=2, col=1)
+    else:
+        power = np.array(result["Power"])
+        fig.add_trace(go.Scatter(
+            x=time_h, y=power,
+            mode='lines', name='Total Power',
+            fill='tozeroy',
+            fillcolor=hex_to_rgba(COLORS["secondary"], 0.15),
+            line=dict(color=COLORS["secondary"], width=1.5),
+            showlegend=False,
+        ), row=2, col=1)
+        avg_power = np.mean(power)
+        max_power = np.max(power)
+    
+    # Average power reference line (dynamic offset)
+    power_annotation_offset = max(max_power * 0.05, 0.1)
+    fig.add_hline(
+        y=avg_power, line_dash="dash", line_color=COLORS["primary"],
+        line_width=1.0, row=2, col=1,
+    )
+    fig.add_trace(go.Scatter(
+        x=[max_time * 0.03], y=[avg_power + power_annotation_offset],
+        mode='text',
+        text=[f'Avg {avg_power:.2f}W'],
+        textfont=dict(size=7, color=COLORS["primary"]),
+        textposition='middle right',
+        showlegend=False,
+        hoverinfo='skip',
+    ), row=2, col=1)
+    
+    # ========== 3. State Timeline (pure color blocks, minimal cognitive load) ==========
+    
+    unique_states = []
+    for s in states:
+        if s not in unique_states:
+            unique_states.append(s)
+    
+    # Draw state color blocks
+    prev_state = states[0]
+    start_time = time_h[0]
+    
     for i, (t, state) in enumerate(zip(time_h, states)):
         is_last = (i == len(states) - 1)
         if state != prev_state or is_last:
             end_t = t if not is_last else time_h[-1]
             color = STATE_COLORS.get(prev_state, COLORS["neutral"])
-            label = prev_state if prev_state not in labeled_states else ""
-            ax3.axvspan(start_time, end_t, alpha=0.85, color=color, label=label)
-            if label:
-                labeled_states.add(prev_state)
+            
+            fig.add_shape(
+                type="rect",
+                x0=start_time, x1=end_t, y0=0, y1=1,
+                fillcolor=color,
+                opacity=0.9,
+                line_width=0,
+                row=3, col=1,
+            )
             start_time = t
             prev_state = state
-
-    handles = [mpatches.Patch(color=STATE_COLORS.get(s, COLORS["neutral"]), label=s) for s in unique_states]
-    ax3.legend(
-        handles=handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.35),
-        ncol=min(len(unique_states), 6),
-        fontsize=9,
-        framealpha=0.9,
+    
+    # State legend position configuration
+    STATE_LEGEND_START_X = 0.08
+    STATE_LEGEND_WIDTH = 0.85
+    
+    # State legend (horizontal at bottom, using paper coordinates)
+    n_states = len(unique_states)
+    for i, state in enumerate(unique_states):
+        color = STATE_COLORS.get(state, COLORS["neutral"])
+        x_pos = STATE_LEGEND_START_X + i * (STATE_LEGEND_WIDTH / n_states)
+        fig.add_annotation(
+            x=x_pos, y=-0.02,
+            xref="paper", yref="paper",
+            text=f"■ {state}",
+            showarrow=False,
+            font=dict(size=7, color=color),
+            xanchor="left",
+        )
+    
+    # ========== Layout Settings ==========
+    
+    # Title as small annotation in top right
+    fig.add_annotation(
+        x=0.95, y=1.01,
+        xref="paper", yref="paper",
+        text=f"TTL {ttl_hours:.2f} h | Avg Power {avg_power:.2f} W",
+        showarrow=False,
+        font=dict(size=9, color=COLORS["primary"]),
+        xanchor="right",
     )
-
-    ax3.set_xlabel("时间 (小时)", fontsize=12, fontweight="bold")
-    ax3.set_ylabel("状态", fontsize=12, fontweight="bold")
-    ax3.set_title("手机使用状态时间线", fontsize=12.5, fontweight="bold", loc="left")
-    ax3.set_xlim(0, max(time_h))
-    ax3.set_yticks([])
-    ax3.grid(False)
-
-    ax3.spines["top"].set_visible(False)
-    ax3.spines["right"].set_visible(False)
-    ax3.spines["left"].set_visible(False)
-
-    # ===== 总标题 =====
-    ttl_hours = result["TTL"] / 3600
-    fig.suptitle(
-        f"电池仿真综合分析 | 续航时间: {ttl_hours:.2f} 小时",
-        fontsize=14.5,
-        fontweight="bold",
-        y=0.98,
+    
+    # Compact layout (increased right margin for legend)
+    fig.update_layout(
+        width=700,
+        height=520,
+        margin=dict(l=50, r=45, t=22, b=38),
+        showlegend=False,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
     )
-
-    # tight_layout 对 GridSpec/外置图例可能不完美，但保存时 bbox_inches 会兜底
-    plt.tight_layout(rect=[0, 0.05, 1, 0.96])
-
+    
+    # Y-axis labels (side, small font)
+    fig.update_yaxes(
+        title_text="Temp(°C)", title_font_size=9, title_standoff=5,
+        tickfont_size=8, row=1, col=1,
+        showgrid=True, gridwidth=0.5, gridcolor="rgba(100,100,100,0.15)",
+    )
+    fig.update_yaxes(
+        title_text="Power(W)", title_font_size=9, title_standoff=5,
+        tickfont_size=8, row=2, col=1,
+        showgrid=True, gridwidth=0.5, gridcolor="rgba(100,100,100,0.15)",
+    )
+    fig.update_yaxes(
+        showticklabels=False, showgrid=False, row=3, col=1,
+        range=[0, 1], fixedrange=True,
+    )
+    
+    # X-axis (shared time axis, only bottom shows ticks and labels)
+    fig.update_xaxes(showticklabels=False, row=1, col=1)
+    fig.update_xaxes(showticklabels=False, row=2, col=1)
+    fig.update_xaxes(
+        title_text="Time (hours)", title_font_size=9, title_standoff=3,
+        tickfont_size=8, row=3, col=1,
+        showgrid=True, gridwidth=0.5, gridcolor="rgba(100,100,100,0.2)",
+    )
+    
+    # Save (static format)
     if save_path:
-        smart_savefig(save_path)
-
+        save_plotly_figure(fig, save_path, size_type="composite")
+    
     if show is None:
         show = get_show_plots()
     if show:
-        plt.show()
-
+        fig.show()
+    
     return fig
 
 
-
 # =====================================================
-# 复合图表2：SOC 对比（各种修正效果对比）
-# =====================================================
-
-# =====================================================
-# 复合图表2：SOC 对比（各种修正效果对比）
+# SOC Comparison Chart
 # =====================================================
 
 def plot_soc_comparison(result, save_path=None, show=None):
     """
-    绘制 SOC 对比图：展示各种修正对电池电量预测的影响
-
-    曲线（若存在）：
-    - 无修正 SOC_uncorrected
-    - 仅电压 SOC_voltage_only
-    - 仅温度 SOC_temperature_only
-    - 仅老化 SOC_aging_only
-    - 全部修正 SOC（result["SOC"]）
+    Plot SOC comparison: showing effects of different correction factors
     """
-    _setup_style()
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-    # -----------------------------
-    # 基础时间轴：来自仿真记录（通常到“全部修正耗尽”为止）
-    # -----------------------------
-    t_h = np.asarray(_to_hours(result["time"]), dtype=float)
-    if len(t_h) == 0:
-        raise ValueError("result['time'] 为空，无法绘图。")
-
-    # -----------------------------
-    # 取出各条 SOC（单位：%）
-    # -----------------------------
-    series = []
-
-    def _get_soc_percent(key):
-        if key not in result:
-            return None
-        arr = np.asarray(result[key], dtype=float) * 100.0
-        # 防御：长度对齐到 t_h
-        n = min(len(arr), len(t_h))
-        return arr[:n]
-
-    soc_full = _get_soc_percent("SOC")
-    if soc_full is None:
-        raise ValueError("result['SOC'] 不存在，无法绘图。")
-
-    soc_uncorrected = _get_soc_percent("SOC_uncorrected")
-    soc_voltage = _get_soc_percent("SOC_voltage_only")
-    soc_temp = _get_soc_percent("SOC_temperature_only")
-    soc_aging = _get_soc_percent("SOC_aging_only")
-
-    # -----------------------------
-    # 样式：先“浅/辅助”，后“深/主线”（视觉更协调）
-    # -----------------------------
-    line_styles = {
-        "uncorrected": dict(color="#6C757D", linestyle="-",  linewidth=2.0, alpha=0.90, label="无修正 (基准)"),
-        "voltage":     dict(color="#2E86AB", linestyle="--", linewidth=2.0, alpha=0.90, label="仅电压修正 (OCV)"),
-        "temp":        dict(color="#28A745", linestyle="-.", linewidth=2.0, alpha=0.90, label="仅温度修正"),
-        "aging":       dict(color="#A23B72", linestyle=":",  linewidth=2.4, alpha=0.90, label="仅老化修正"),
-        "full":        dict(color="#C73E1D", linestyle="-",  linewidth=2.8, alpha=0.98, label="全部修正 (OCV+温度+老化)"),
+    time_h = np.array(to_hours(result["time"]))
+    
+    fig = go.Figure()
+    
+    # Line style configuration
+    line_configs = {
+        "SOC_uncorrected": dict(color=COLORS["neutral"], dash="solid", width=1.8, name="No Correction"),
+        "SOC_voltage_only": dict(color=COLORS["accent"], dash="dash", width=1.8, name="Voltage Only"),
+        "SOC_temperature_only": dict(color=COLORS["success"], dash="dashdot", width=1.8, name="Temperature Only"),
+        "SOC_aging_only": dict(color="#A855F7", dash="dot", width=2.0, name="Aging Only"),
+        "SOC": dict(color=COLORS["secondary"], dash="solid", width=LINE_WIDTHS["main"], name="All Corrections"),
     }
-
-    # -----------------------------
-    # 核心：每条曲线估计“耗尽时间”，并把曲线补到 (t_end, 0)
-    # -----------------------------
-    def _estimate_end_time_linear(t, soc, tail_points=30):
-        """
-        返回该曲线 SOC 到 0 的时间（小时）。
-        - 如果已经到 0：返回首次 <=0 的 t
-        - 否则：用末段线性外推到 0
-        """
-        soc = np.asarray(soc, dtype=float)
-        t = np.asarray(t, dtype=float)
-
-        # 已经到 0：取首次到 0 的时刻
-        idx0 = np.where(soc <= 0.0)[0]
-        if len(idx0) > 0:
-            return float(t[idx0[0]])
-
-        # 未到 0：末段线性回归 / 斜率外推
-        n = len(soc)
-        k = min(tail_points, n)
-        if k < 2:
-            # 数据太少，退化：无法估计，返回末时刻
-            return float(t[-1])
-
-        tt = t[-k:]
-        yy = soc[-k:]
-
-        # 用最小二乘拟合 yy ≈ a*tt + b
-        A = np.vstack([tt, np.ones_like(tt)]).T
-        a, b = np.linalg.lstsq(A, yy, rcond=None)[0]
-
-        # 如果斜率不为负（异常），就不外推
-        if a >= -1e-9:
-            return float(t[-1])
-
-        # 解 0 = a*t + b -> t = -b/a
-        t_end = -b / a
-
-        # 不允许比当前末时刻更小
-        t_end = max(float(t[-1]), float(t_end))
-        return t_end
-
-    def _extend_curve_to_zero(t, soc, t_end):
-        """
-        把曲线延伸到 (t_end, 0)
-        - 若末点已经是 0：不变
-        - 若 t_end == t[-1]：也不补
-        """
-        t = np.asarray(t, dtype=float)
-        soc = np.asarray(soc, dtype=float)
-
-        if len(soc) == 0:
-            return t, soc
-
-        if soc[-1] <= 0.0 or t_end <= t[-1] + 1e-9:
-            return t, soc
-
-        # 追加一个终点到 0
-        t2 = np.append(t, t_end)
-        soc2 = np.append(soc, 0.0)
-        return t2, soc2
-
-    # 构建要画的序列（按“浅->深”的顺序加入）
-    if soc_uncorrected is not None:
-        series.append(("uncorrected", soc_uncorrected))
-    if soc_voltage is not None:
-        series.append(("voltage", soc_voltage))
-    if soc_temp is not None:
-        series.append(("temp", soc_temp))
-    if soc_aging is not None:
-        series.append(("aging", soc_aging))
-    # 主线最后
-    series.append(("full", soc_full))
-
-    # 估计每条曲线的耗尽时间，并扩展
-    extended = []
-    end_times = []
-
-    for name, soc in series:
-        t_end = _estimate_end_time_linear(t_h, soc, tail_points=30)
-        t_ext, soc_ext = _extend_curve_to_zero(t_h, soc, t_end)
-        extended.append((name, t_ext, soc_ext, t_end))
-        end_times.append(t_end)
-
-    # ✅ 横轴上限 = 所有曲线耗尽时间最大值（你要的“最大时间”）
-    x_max = max(end_times) if len(end_times) else float(t_h[-1])
-
-    # -----------------------------
-    # 绘图
-    # -----------------------------
-    fig, ax = plt.subplots(figsize=(13, 7))
-
-    for name, t_ext, soc_ext, t_end in extended:
-        ax.plot(t_ext, soc_ext, zorder=3 if name == "full" else 2, **line_styles[name])
-
-    # 关键电量线（每种阈值各一条线）
-    ax.axhline(y=20, color="#F39C12", linestyle=":", alpha=0.70, linewidth=1.3, label="低电量警告 (20%)")
-    ax.axhline(y=5,  color="#E74C3C", linestyle=":", alpha=0.70, linewidth=1.3, label="极低电量 (5%)")
-
-    ax.set_xlabel("时间 (小时)", fontsize=12, fontweight="bold")
-    ax.set_ylabel("电量 SOC (%)", fontsize=12, fontweight="bold")
-    ax.set_ylim(0, 105)
-    ax.set_xlim(0, x_max)  # ✅ 关键修复：最大时间
-    ax.grid(True, alpha=0.25, linestyle="-")
-
-    ax.set_title("电池电量变化对比：各修正因子效果分析", fontsize=14, fontweight="bold", pad=15)
-    ax.legend(loc="upper right", fontsize=9, framealpha=0.95, ncol=1)
-
-    # -----------------------------
-    # 统计信息框（用每条曲线的 t_end）
-    # -----------------------------
-    # 取出对应耗尽时间（方便展示）
-    ttl_map = {name: t_end for (name, _, _, t_end) in extended}
-
-    lines = [
-        "对比分析",
-        "─" * 16,
-        f"全部修正: {ttl_map.get('full', np.nan):.2f} h",
-    ]
-    if "voltage" in ttl_map:
-        lines.append(f"仅电压:   {ttl_map['voltage']:.2f} h")
-    if "temp" in ttl_map:
-        lines.append(f"仅温度:   {ttl_map['temp']:.2f} h")
-    if "aging" in ttl_map:
-        lines.append(f"仅老化:   {ttl_map['aging']:.2f} h")
-    if "uncorrected" in ttl_map:
-        lines.append(f"无修正:   {ttl_map['uncorrected']:.2f} h")
-
-    stats_text = "\n".join(lines)
-
-    ax.text(
-        0.02, 0.02, stats_text,
-        transform=ax.transAxes, fontsize=10,
-        verticalalignment="bottom", horizontalalignment="left",
-        bbox=dict(boxstyle="round,pad=0.5", facecolor="white", alpha=0.95, edgecolor="gray"),
-        family="monospace"
+    
+    ttl_map = {}
+    x_max = 0
+    
+    for key, config in line_configs.items():
+        if key in result:
+            soc_data = np.array(result[key]) * 100
+            n = min(len(soc_data), len(time_h))
+            
+            fig.add_trace(go.Scatter(
+                x=time_h[:n],
+                y=soc_data[:n],
+                mode='lines',
+                name=config["name"],
+                line=dict(color=config["color"], dash=config["dash"], width=config["width"]),
+                hovertemplate=f'{config["name"]}<br>Time: %{{x:.2f}} h<br>SOC: %{{y:.1f}}%<extra></extra>'
+            ))
+            
+            # Estimate TTL
+            idx_zero = np.where(soc_data[:n] <= 0)[0]
+            if len(idx_zero) > 0:
+                ttl_map[config["name"]] = time_h[idx_zero[0]]
+            else:
+                ttl_map[config["name"]] = time_h[n-1]
+            
+            x_max = max(x_max, ttl_map[config["name"]])
+    
+    # Critical battery lines
+    fig.add_hline(y=20, line_dash="dot", line_color=COLORS["warning"],
+                  line_width=1, opacity=0.7)
+    fig.add_hline(y=5, line_dash="dot", line_color=COLORS["danger"],
+                  line_width=1, opacity=0.7)
+    
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(
+            text="SOC Comparison: Correction Factor Analysis",
+            font=dict(size=FONT_SIZES["title"]),
+        ),
+        xaxis_title="Time (hours)",
+        yaxis_title="State of Charge (%)",
+        xaxis=dict(range=[0, x_max * 1.02]),
+        yaxis=dict(range=[0, 105]),
+        width=width,
+        height=height,
+        legend=dict(
+            x=0.98, y=0.98,
+            xanchor="right", yanchor="top",
+            font=dict(size=FONT_SIZES["legend"]),
+        ),
+        margin=dict(l=50, r=20, t=50, b=45),
     )
-
-    plt.tight_layout()
-
+    
+    # Add statistics box
+    stats_lines = ["<b>TTL Comparison</b>"]
+    for name, ttl in sorted(ttl_map.items(), key=lambda x: -x[1]):
+        stats_lines.append(f"{name}: {ttl:.2f} h")
+    
+    fig.add_annotation(
+        x=0.02, y=0.02, xref="paper", yref="paper",
+        text="<br>".join(stats_lines),
+        showarrow=False,
+        font=dict(family="monospace", size=FONT_SIZES["annotation"]-1),
+        bgcolor="rgba(255,255,255,0.95)",
+        bordercolor=COLORS["neutral"],
+        borderwidth=1,
+        borderpad=4,
+        align="left",
+        xanchor="left", yanchor="bottom",
+    )
+    
     if save_path:
-        smart_savefig(save_path)
-
+        save_plotly_figure(fig, save_path, size_type="default")
+    
     if show is None:
         show = get_show_plots()
     if show:
-        plt.show()
-
+        fig.show()
+    
     return fig
-

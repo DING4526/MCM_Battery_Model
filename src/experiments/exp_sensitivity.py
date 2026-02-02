@@ -1,5 +1,5 @@
 # experiments/exp_sensitivity.py
-# 敏感度分析实验模块
+# 敏感度分析实验模块（Plotly 版本）
 
 import sys
 import os
@@ -15,11 +15,10 @@ from visualization.sensitivity_plot import (
     plot_sensitivity_spider,
     plot_sensitivity_heatmap,
 )
-from visualization.config import smart_savefig
+from visualization.config import save_plotly_figure, get_output_dir
 from usage.scenario import *
 
 
-# 可分析的敏感度参数
 SENS_PARAMS = ["u", "r", "u_cpu", "lambda_cell", "delta_signal", "r_on"]
 
 PARAM_DESCRIPTIONS = {
@@ -48,21 +47,7 @@ def run_sensitivity_experiment(
     verbose=True,
     output_dir="sensitivity",
 ):
-    """
-    运行敏感度分析实验
-    
-    参数：
-        scenario : dict - 使用场景配置
-        scenario_name : str - 场景名称
-        param_list : list - 要分析的参数列表
-        eps : float - 扰动比例（默认 ±20%）
-        n_mc : int - 每次扰动的 Monte Carlo 样本数
-        verbose : bool - 是否输出详细信息
-        output_dir : str - 输出子目录名
-    
-    返回：
-        results : dict - 敏感度分析结果
-    """
+    """运行敏感度分析实验"""
     
     if scenario is None:
         scenario = SCENARIO_STUDENT_DAILY_MARKOV
@@ -80,10 +65,8 @@ def run_sensitivity_experiment(
         print(f"Monte Carlo 样本数: {n_mc}")
         print("-" * 60)
     
-    # 保存原始 usage 参数
     original_states = copy.deepcopy(USAGE_STATES)
     
-    # 计算基准 TTL
     if verbose:
         print("计算基准 TTL...")
     
@@ -99,23 +82,18 @@ def run_sensitivity_experiment(
         if verbose:
             print(f"分析参数: {PARAM_DESCRIPTIONS.get(p, p)}...")
         
-        # 正扰动
         _perturb_usage(p, 1 + eps)
         ttl_plus = sum(run_monte_carlo(scenario, n_samples=n_mc)) / n_mc
         
-        # 恢复
         USAGE_STATES.clear()
         USAGE_STATES.update(copy.deepcopy(original_states))
         
-        # 负扰动
         _perturb_usage(p, 1 - eps)
         ttl_minus = sum(run_monte_carlo(scenario, n_samples=n_mc)) / n_mc
         
-        # 恢复
         USAGE_STATES.clear()
         USAGE_STATES.update(copy.deepcopy(original_states))
         
-        # 中心差分敏感度
         S = (ttl_plus - ttl_minus) / (2 * eps)
         S_norm = S / ttl_base
         
@@ -135,24 +113,25 @@ def run_sensitivity_experiment(
             print(f"  {i}. {PARAM_DESCRIPTIONS.get(p, p)}: {sign}{abs(results[p]['S_norm']):.4f}")
         print("=" * 60)
     
-    # 独立保存每个图表
+    # 保存图表（Plotly 版本）
     if verbose:
         print("保存图表...")
     
     # 1. 敏感度柱状图
-    plot_sensitivity_bar(results, show=False)
-    smart_savefig("sensitivity_bar.png", output_dir)
+    fig = plot_sensitivity_bar(results, show=False)
+    save_plotly_figure(fig, "sensitivity_bar", output_dir, size_type="default")
     
     # 2. 龙卷风图
-    plot_sensitivity_tornado(results, ttl_base, show=False)
-    smart_savefig("sensitivity_tornado.png", output_dir)
+    fig = plot_sensitivity_tornado(results, ttl_base, show=False)
+    save_plotly_figure(fig, "sensitivity_tornado", output_dir, size_type="default")
     
     # 3. 蜘蛛图
-    plot_sensitivity_spider(results, show=False)
-    smart_savefig("sensitivity_spider.png", output_dir)
+    fig = plot_sensitivity_spider(results, show=False)
+    save_plotly_figure(fig, "sensitivity_spider", output_dir, size_type="square")
     
     if verbose:
-        print(f"图表已保存到 output/{output_dir}/ 目录")
+        out_path = get_output_dir(output_dir)
+        print(f"图表已保存到 {out_path}/ 目录")
     
     results["_baseline_ttl"] = ttl_base
     return results
@@ -167,9 +146,9 @@ def run_multi_eps_sensitivity(
     verbose=True,
     output_dir="sensitivity",
 ):
-    """运行多扰动幅度敏感度分析"""
-    import matplotlib.pyplot as plt
-    import numpy as np
+    """运行多扰动幅度敏感度分析（Plotly 版本）"""
+    import plotly.graph_objects as go
+    from visualization.config import COLORS, LINE_WIDTHS, FONT_SIZES, FIGURE_SIZES
     
     if scenario is None:
         scenario = SCENARIO_STUDENT_DAILY_MARKOV
@@ -196,23 +175,34 @@ def run_multi_eps_sensitivity(
             multi_results[p]["eps"].append(eps * 100)
             multi_results[p]["S_norm"].append(results[p]["S_norm"])
     
-    # 绘制图表
-    fig, ax = plt.subplots(figsize=(10, 6))
-    colors = ['#2E86AB', '#A23B72', '#F18F01']
+    fig = go.Figure()
+    
+    colors = [COLORS["accent"], COLORS["secondary"], COLORS["warning"]]
     
     for i, p in enumerate(param_list):
-        ax.plot(multi_results[p]["eps"], multi_results[p]["S_norm"], 
-                'o-', color=colors[i % len(colors)], linewidth=2,
-                label=PARAM_DESCRIPTIONS.get(p, p))
+        fig.add_trace(go.Scatter(
+            x=multi_results[p]["eps"],
+            y=multi_results[p]["S_norm"],
+            mode='lines+markers',
+            name=PARAM_DESCRIPTIONS.get(p, p),
+            line=dict(color=colors[i % len(colors)], width=LINE_WIDTHS["main"]),
+            marker=dict(size=6),
+        ))
     
-    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-    ax.set_xlabel("扰动幅度 (%)")
-    ax.set_ylabel("归一化敏感度")
-    ax.set_title("敏感度与扰动幅度关系")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    smart_savefig("multi_eps.png", output_dir)
+    fig.add_hline(y=0, line_color=COLORS["primary"], line_width=1)
+    
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(text="敏感度与扰动幅度关系", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="扰动幅度 (%)",
+        yaxis_title="归一化敏感度",
+        width=width,
+        height=height,
+        legend=dict(font=dict(size=FONT_SIZES["legend"])),
+        margin=dict(l=50, r=20, t=50, b=45),
+    )
+    
+    save_plotly_figure(fig, "multi_eps", output_dir, size_type="default")
     
     return multi_results
 
