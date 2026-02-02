@@ -486,9 +486,11 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         y=T_amb_c, line_dash="dash", line_color=COLORS["neutral"],
         line_width=1.0, row=1, col=1,
     )
-    # 环境温度标注（使用 trace 坐标）
+    # 环境温度标注（动态偏移）
+    temp_range = max(temp_c) - min(temp_c) if max(temp_c) > min(temp_c) else 5
+    annotation_offset = max(temp_range * 0.05, 0.5)
     fig.add_trace(go.Scatter(
-        x=[max_time * 0.03], y=[T_amb_c + 1],
+        x=[max_time * 0.03], y=[T_amb_c + annotation_offset],
         mode='text',
         text=[f'环境 {T_amb_c:.0f}°C'],
         textfont=dict(size=7, color=COLORS["neutral"]),
@@ -498,15 +500,16 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
     ), row=1, col=1)
     
     # 高温警戒线（45°C）
+    TEMP_THRESHOLD = 45
     if max(temp_c) > 40:
         fig.add_hline(
-            y=45, line_dash="dot", line_color=COLORS["danger"],
+            y=TEMP_THRESHOLD, line_dash="dot", line_color=COLORS["danger"],
             line_width=1.0, row=1, col=1,
         )
         fig.add_trace(go.Scatter(
-            x=[max_time * 0.03], y=[46],
+            x=[max_time * 0.03], y=[TEMP_THRESHOLD + annotation_offset],
             mode='text',
-            text=['警戒 45°C'],
+            text=[f'警戒 {TEMP_THRESHOLD}°C'],
             textfont=dict(size=7, color=COLORS["danger"]),
             textposition='middle right',
             showlegend=False,
@@ -554,14 +557,17 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         avg_power = np.mean(total_power)
         max_power = np.max(total_power)
         
-        # 功耗模块图例（图内右侧，确保不被截断）
-        legend_y_positions = [max_power * 0.92, max_power * 0.80, max_power * 0.68, 
-                              max_power * 0.56, max_power * 0.44]
+        # 功耗模块图例位置配置
+        LEGEND_START_Y = 0.92
+        LEGEND_SPACING = 0.12
+        LEGEND_X_POS = 0.88
+        
         layer_names = ["屏幕", "CPU", "通信", "GPS", "后台"]
         for i, name in enumerate(layer_names):
             full_name = "无线通信" if name == "通信" else name
+            y_pos = max_power * (LEGEND_START_Y - i * LEGEND_SPACING)
             fig.add_trace(go.Scatter(
-                x=[max_time * 0.88], y=[legend_y_positions[i]],
+                x=[max_time * LEGEND_X_POS], y=[y_pos],
                 mode='text',
                 text=[f'■{name}'],
                 textfont=dict(size=7, color=POWER_BREAKDOWN_COLORS[full_name]),
@@ -582,13 +588,14 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
         avg_power = np.mean(power)
         max_power = np.max(power)
     
-    # 平均功耗参考线
+    # 平均功耗参考线（动态偏移）
+    power_annotation_offset = max(max_power * 0.05, 0.1)
     fig.add_hline(
         y=avg_power, line_dash="dash", line_color=COLORS["primary"],
         line_width=1.0, row=2, col=1,
     )
     fig.add_trace(go.Scatter(
-        x=[max_time * 0.03], y=[avg_power + 0.15],
+        x=[max_time * 0.03], y=[avg_power + power_annotation_offset],
         mode='text',
         text=[f'均值 {avg_power:.2f}W'],
         textfont=dict(size=7, color=COLORS["primary"]),
@@ -625,11 +632,15 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
             start_time = t
             prev_state = state
     
+    # 状态图例位置配置
+    STATE_LEGEND_START_X = 0.08
+    STATE_LEGEND_WIDTH = 0.85
+    
     # 状态图例（底部水平排列，使用 paper 坐标）
     n_states = len(unique_states)
     for i, state in enumerate(unique_states):
         color = STATE_COLORS.get(state, COLORS["neutral"])
-        x_pos = 0.08 + i * (0.85 / n_states)
+        x_pos = STATE_LEGEND_START_X + i * (STATE_LEGEND_WIDTH / n_states)
         fig.add_annotation(
             x=x_pos, y=-0.02,
             xref="paper", yref="paper",
