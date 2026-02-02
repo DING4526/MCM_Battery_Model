@@ -67,10 +67,9 @@ class DeviceTimeseriesCompactConfig:
     soc_fill_alpha: float = 0.12
 
     # Temperature axis
-    tb_pad_C: float = 1.0
-    tb_max_cap_C: float = 55.0
-    tb_force_zero: bool = True  # force right axis to include 0°C
-    tb_color: str = "#C0392B"   # red-ish
+    tb_ylim: Tuple[float, float] = (10.0, 45.0)  # fixed range 10-45°C
+    tb_line_color: str = "#C0392B"   # red-ish for the line
+    tb_axis_color: str = "black"     # black for axis ticks and labels
 
     # Low SOC band - disabled by default to avoid background fill issue
     show_low_soc_band: bool = False
@@ -241,15 +240,18 @@ def plot_device_timeseries_compact(
     # ---- figure layout with space for right legend ----
     fig = plt.figure(figsize=cfg.figsize)
     
-    # Reserve right margin for legends
+    # Reserve right margin for legends and colorbar
     if cfg.legend_on_right:
+        # Main plot area: left=0.08 to right=0.78
+        # Legend area: 0.78 to 0.85
+        # Colorbar area: 0.86 to 0.88
         gs = fig.add_gridspec(
             nrows=4,
             ncols=1,
             height_ratios=list(cfg.height_ratios),
             hspace=cfg.hspace,
             left=0.08,
-            right=0.82,  # leave space on right for legends
+            right=0.78,  # leave more space on right for legends + colorbar
             top=0.95,
             bottom=0.10,
         )
@@ -289,25 +291,21 @@ def plot_device_timeseries_compact(
             x_end = t_hr[-1] if len(t_hr) > 0 else t_edges[-1]
             axA.axvspan(t_edges[idx0], x_end, alpha=0.10, linewidth=0)
 
-    # Temperature on twin axis (red-ish, include 0°C)
+    # Temperature on twin axis
     axA2 = axA.twinx()
     axA2.plot(
         t_hr,
         tb_c,
         linewidth=2.0,
         linestyle="--",
-        color=cfg.tb_color,
+        color=cfg.tb_line_color,
         label="Tb (°C)",
     )
 
-    tb_lo, tb_hi = _nice_limits(tb_c, pad=0.08)
-    tb_hi = min(tb_hi + cfg.tb_pad_C, cfg.tb_max_cap_C)
-    tb_lo = tb_lo - cfg.tb_pad_C
-    if cfg.tb_force_zero:
-        tb_lo = min(tb_lo, 0.0)
-    axA2.set_ylim(tb_lo, tb_hi)
-    axA2.set_ylabel("")  # Remove right axis label to avoid overlap
-    axA2.tick_params(axis="y", colors=cfg.tb_color)
+    # Fixed temperature range 10-45°C
+    axA2.set_ylim(*cfg.tb_ylim)
+    axA2.set_ylabel("Tb (°C)", color=cfg.tb_axis_color)
+    axA2.tick_params(axis="y", colors=cfg.tb_axis_color)
 
     # Legend for Panel A - place on right side outside plot
     h1, l1 = axA.get_legend_handles_labels()
@@ -425,12 +423,19 @@ def plot_device_timeseries_compact(
         for y in [1, 2, 3]:
             axH.axhline(y, linewidth=1.0, alpha=0.18)
 
-        # Colorbar - placed on right with short label
+        # Colorbar - place in a dedicated axes on the far right
+        # This prevents the colorbar from taking space from the heatmap
         if cfg.legend_on_right:
-            cbar = fig.colorbar(im, ax=axH, pad=0.15, fraction=0.03, aspect=15)
+            # Get the position of the heatmap axes
+            pos = axH.get_position()
+            # Create a new axes for colorbar at far right edge
+            # Position: [left, bottom, width, height]
+            cax = fig.add_axes([0.92, pos.y0, 0.015, pos.height])
+            cbar = fig.colorbar(im, cax=cax)
+            cbar.set_label(cfg.heatmap_cbar_label, fontsize=9)
         else:
             cbar = fig.colorbar(im, ax=axH, pad=0.012, fraction=0.045)
-        cbar.set_label(cfg.heatmap_cbar_label, fontsize=9)
+            cbar.set_label(cfg.heatmap_cbar_label, fontsize=9)
     else:
         axH.text(
             0.5,
