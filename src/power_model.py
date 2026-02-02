@@ -69,17 +69,17 @@ def radio_power(p):
     return P_avg * alpha * (1 + p["delta_signal"])
 
 
-# =========================
-# GPS 功耗模型
-# =========================
-def gps_power(p):
-    """
-    GPS 功耗模型（启用比例模型）
-    参数：
-        r_on : GPS 启用时间比例（0~1）
-        P_on : 持续定位功耗（W）
-    """
-    return p["r_on"] * p["P_on"]
+# # =========================
+# # GPS 功耗模型
+# # =========================
+# def gps_power(p):
+#     """
+#     GPS 功耗模型（启用比例模型）
+#     参数：
+#         r_on : GPS 启用时间比例（0~1）
+#         P_on : 持续定位功耗（W）
+#     """
+#     return p["r_on"] * p["P_on"]
 
 
 # =========================
@@ -111,7 +111,6 @@ def total_power(state_params):
         screen_power(state_params)
         + cpu_power(state_params)
         + radio_power(state_params)
-        + gps_power(state_params)
         + background_power(state_params)
     )
 
@@ -132,14 +131,12 @@ def power_breakdown(state_params):
     p_screen = screen_power(state_params)
     p_cpu = cpu_power(state_params)
     p_radio = radio_power(state_params)
-    p_gps = gps_power(state_params)
     p_bg = background_power(state_params)
-    
+
     return {
         "screen": p_screen,
         "cpu": p_cpu,
         "radio": p_radio,
-        "gps": p_gps,
         "background": p_bg,
-        "total": p_screen + p_cpu + p_radio + p_gps + p_bg,
+        "total": p_screen + p_cpu + p_radio + p_bg,
     }
