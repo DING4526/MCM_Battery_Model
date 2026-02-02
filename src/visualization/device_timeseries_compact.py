@@ -243,8 +243,8 @@ def plot_device_timeseries_compact(
     # Reserve right margin for legends and colorbar
     if cfg.legend_on_right:
         # Main plot area: left=0.08 to right=0.78
-        # Legend area: 0.78 to 0.85
-        # Colorbar area: 0.86 to 0.88
+        # Legend area: ~0.80 to ~0.90
+        # Colorbar area: 0.92 to 0.935
         gs = fig.add_gridspec(
             nrows=4,
             ncols=1,
