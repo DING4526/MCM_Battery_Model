@@ -54,10 +54,16 @@ plot_population_lifetime_distribution(df, kind="ecdf", stratify="usage_dominant_
                                       save_path="lifetime_ecdf_by_usage.pdf", show=False)
 ```
 
-## Demo
+## Demo / summary.csv
 
-Generate synthetic data and export demo PDF figures:
+Generate figures from runner output (summary.csv) with data-driven key thresholds:
 
 ```bash
-python -m visualization.demo
+python -m visualization.demo --summary summary.csv --out output/figures_summary
+```
+
+If summary.csv is not available, you can still generate synthetic demo figures:
+
+```bash
+python -m visualization.demo --synthetic --out figures_demo
 ```
