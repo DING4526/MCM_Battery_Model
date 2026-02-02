@@ -462,9 +462,9 @@ def plot_device_timeseries_compact(
     if cfg.state_band_use_rle:
         segs = _rle_segments([str(s) for s in states])
         for a, b, st in segs:
-            # Clamp segment bounds to actual data range
-            x0 = max(t_edges[a], x_min)
-            x1 = min(t_edges[b], x_max) if b < len(t_edges) else x_max
+            # Clamp segment bounds to actual data range to avoid overflow
+            x0 = max(t_edges[a] if a < len(t_edges) else x_min, x_min)
+            x1 = min(t_edges[b] if b < len(t_edges) else x_max, x_max)
             color = palette.get(st, "#BBBBBB")
             axC.axvspan(x0, x1, ymin=0.0, ymax=1.0, color=color, linewidth=0)
     else:
