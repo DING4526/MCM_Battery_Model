@@ -1,24 +1,65 @@
 # visualization/config.py
-# 可视化配置模块
+# 可视化配置模块（Plotly 版本 - 单栏 LaTeX 论文优化）
 #
 # 提供统一的配置：
-# - 中文字体支持
-# - 默认输出目录
+# - 专业配色方案
+# - 单栏论文尺寸适配（3.5 英寸宽度）
 # - 全局样式设置
+# - Plotly 模板
 
 import os
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 from pathlib import Path
+import plotly.graph_objects as go
+import plotly.io as pio
+
+# =====================================================
+# 单栏 LaTeX 论文尺寸配置
+# =====================================================
+
+# 单栏论文标准宽度：3.5 英寸 ≈ 8.89 cm
+# 300 DPI 下：3.5 * 300 = 1050 像素
+# 使用 scale=2 导出以获得高清效果
+
+LATEX_SINGLE_COLUMN_WIDTH_INCH = 3.5
+LATEX_DPI = 300
+
+# 图表尺寸（像素）- 导出时 scale=2
+FIGURE_WIDTH = 700
+FIGURE_HEIGHT = 500
+
+# 不同图表类型的推荐尺寸
+FIGURE_SIZES = {
+    "default": (700, 500),
+    "wide": (700, 400),
+    "square": (600, 550),
+    "tall": (700, 600),
+    "timeline": (700, 250),
+    "composite": (700, 800),
+}
+
+# 字体大小（论文适配）
+FONT_SIZES = {
+    "title": 14,
+    "axis_title": 11,
+    "axis_tick": 10,
+    "legend": 9,
+    "annotation": 9,
+}
+
+# 线条宽度
+LINE_WIDTHS = {
+    "main": 2.0,
+    "secondary": 1.5,
+    "grid": 0.5,
+    "axis": 1.0,
+}
+
 
 # =====================================================
 # 默认输出目录配置
 # =====================================================
 
-# 项目根目录（与 src 平行的 output 目录）
 _project_root = None
-
-# 全局显示控制（默认不弹窗）
 _show_plots = False
 
 
@@ -34,7 +75,7 @@ def _get_project_root():
 
 
 def set_show_plots(show: bool):
-    """设置是否调用 plt.show()"""
+    """设置是否显示图形"""
     global _show_plots
     _show_plots = show
 
@@ -45,15 +86,7 @@ def get_show_plots() -> bool:
 
 
 def get_output_dir(subdir=""):
-    """
-    获取输出目录
-    
-    参数：
-        subdir : str - 子目录名（如 "basic", "monte_carlo" 等）
-    
-    返回：
-        str - 输出目录路径
-    """
+    """获取输出目录"""
     project_root = _get_project_root()
     if subdir:
         output_dir = project_root / "output" / subdir
@@ -65,7 +98,6 @@ def get_output_dir(subdir=""):
 
 def set_output_dir(path):
     """设置输出目录（兼容旧接口）"""
-    # 此函数保留用于兼容，但实际上使用 get_output_dir(subdir) 更好
     pass
 
 
@@ -75,197 +107,67 @@ def ensure_output_dir():
 
 
 def get_save_path(filename, subdir=""):
-    """
-    获取完整的保存路径
-    
-    参数：
-        filename : str - 文件名
-        subdir : str - 子目录名
-    
-    返回：
-        str - 完整路径
-    """
+    """获取完整的保存路径"""
     if filename is None:
         return None
     
-    # 如果是绝对路径，直接返回
     if os.path.isabs(filename):
         dir_path = os.path.dirname(filename)
         if dir_path:
             os.makedirs(dir_path, exist_ok=True)
         return filename
     
-    # 获取输出目录并拼接文件名
     output_dir = get_output_dir(subdir)
     return os.path.join(output_dir, filename)
 
 
 # =====================================================
-# 中文字体配置
-# =====================================================
-
-# 标记是否已初始化字体
-_font_initialized = False
-
-def setup_chinese_font():
-    """
-    配置 matplotlib 支持中文显示
-    
-    自动检测系统可用的中文字体，优先级：
-    1. WenQuanYi Micro Hei (文泉驿微米黑) - Linux
-    2. WenQuanYi Zen Hei (文泉驿正黑) - Linux
-    3. Noto Sans CJK SC (思源黑体) - Linux
-    4. SimHei (黑体) - Windows
-    5. Microsoft YaHei (微软雅黑) - Windows
-    6. PingFang SC (苹方) - macOS
-    7. Heiti SC (黑体-简) - macOS
-    8. DejaVu Sans (兜底方案)
-    """
-    global _font_initialized
-    import warnings
-    import matplotlib.font_manager as fm
-    
-    # 刷新字体缓存（确保新安装的字体被识别）
-    if not _font_initialized:
-        try:
-            # 尝试重新加载字体管理器
-            fm._load_fontmanager(try_read_cache=False)
-        except Exception:
-            pass
-        _font_initialized = True
-    
-    # 候选中文字体列表（优先 Linux 字体）
-    chinese_fonts = [
-        'WenQuanYi Micro Hei',  # Linux 文泉驿微米黑
-        'WenQuanYi Zen Hei',    # Linux 文泉驿正黑
-        'Noto Sans CJK SC',     # Linux 思源黑体
-        'Droid Sans Fallback',  # Android/Linux
-        'SimHei',               # Windows 黑体
-        'Microsoft YaHei',      # Windows 微软雅黑
-        'PingFang SC',          # macOS 苹方
-        'Heiti SC',             # macOS 黑体
-        'STHeiti',              # macOS 华文黑体
-        'DejaVu Sans',          # 兜底方案
-    ]
-    
-    # 获取系统可用字体
-    available_fonts = set()
-    try:
-        from matplotlib.font_manager import fontManager
-        for font in fontManager.ttflist:
-            available_fonts.add(font.name)
-    except Exception:
-        pass
-    
-    # 找到第一个可用的中文字体
-    selected_font = None
-    for font in chinese_fonts:
-        if font in available_fonts:
-            selected_font = font
-            break
-    
-    # 如果没有找到，使用 sans-serif 作为默认
-    if selected_font is None:
-        selected_font = 'sans-serif'
-        warnings.warn(
-            "未找到支持中文的字体，中文可能显示为方块。"
-            "建议安装以下字体之一：SimHei, Microsoft YaHei, PingFang SC, "
-            "WenQuanYi Micro Hei, Noto Sans CJK SC",
-            UserWarning
-        )
-    
-    return selected_font
-
-
-def setup_style():
-    """
-    设置全局绘图样式（包含中文支持）
-    """
-    # 使用 seaborn 风格
-    try:
-        plt.style.use('seaborn-v0_8-whitegrid')
-    except OSError:
-        # 兼容旧版本
-        try:
-            plt.style.use('seaborn-whitegrid')
-        except OSError:
-            pass
-    
-    # 配置中文字体
-    chinese_font = setup_chinese_font()
-    
-    # 设置字体
-    plt.rcParams['font.sans-serif'] = [chinese_font, 'DejaVu Sans', 'Arial']
-    plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
-    
-    # 设置字体大小
-    plt.rcParams['font.size'] = 10
-    plt.rcParams['axes.titlesize'] = 12
-    plt.rcParams['axes.labelsize'] = 10
-    plt.rcParams['figure.titlesize'] = 14
-    plt.rcParams['figure.dpi'] = 100
-    
-    # 图例字体
-    plt.rcParams['legend.fontsize'] = 9
-    
-    # 刻度字体
-    plt.rcParams['xtick.labelsize'] = 9
-    plt.rcParams['ytick.labelsize'] = 9
-    
-    # 设置等宽字体（用于统计面板）
-    plt.rcParams['font.monospace'] = [chinese_font, 'DejaVu Sans Mono', 'Courier New']
-
-
-# 获取等宽字体名称（用于统计面板）
-def get_monospace_font():
-    """获取支持中文的等宽字体"""
-    chinese_font = setup_chinese_font()
-    return chinese_font  # 中文字体通常也支持等宽显示
-
-
-# =====================================================
-# 配色方案
+# 配色方案（论文级专业配色 - 打印友好）
 # =====================================================
 
 COLORS = {
-    "primary": "#2E86AB",      # 主色调 - 深蓝
-    "secondary": "#A23B72",    # 次色调 - 紫红
-    "accent": "#F18F01",       # 强调色 - 橙色
-    "success": "#28A745",      # 成功色 - 绿色
-    "danger": "#C73E1D",       # 警告色 - 红色
-    "neutral": "#6C757D",      # 中性色 - 灰色
+    "primary": "#2C3E50",
+    "secondary": "#C0392B",
+    "accent": "#2980B9",
+    "success": "#27AE60",
+    "danger": "#E74C3C",
+    "neutral": "#7F8C8D",
+    "warning": "#D35400",
 }
 
-# 使用状态配色
 STATE_COLORS = {
-    "DeepIdle": "#4ECDC4",     # 青绿色
-    "Social": "#45B7D1",       # 天蓝色
-    "Video": "#795543",        # 浅绿色
-    "Gaming": "#FF6B6B",       # 珊瑚红
-    "Navigation": "#FFE66D",   # 明黄色
-    "Camera": "#DDA0DD",       # 梅红色
+    "DeepIdle": "#95A5A6",
+    "Social": "#3498DB",
+    "Video": "#8E44AD",
+    "Gaming": "#C0392B",
+    "Navigation": "#D35400",
+    "Camera": "#16A085",
 }
 
-# 场景配色
 SCENARIO_COLORS = {
-    "Student Daily": "#2E86AB",
-    "Commute": "#A23B72",
-    "Weekend": "#F18F01",
-    "Travel": "#28A745",
-    "DeepIdle Only": "#6C757D",
-    "Gaming Only": "#DC3545",
-    "Video Only": "#17A2B8",
-    "Navigation Only": "#FFC107",
+    "Student Daily": "#2980B9",
+    "学生日常": "#2980B9",
+    "Commute": "#C0392B",
+    "通勤": "#C0392B",
+    "Weekend": "#8E44AD",
+    "周末娱乐": "#8E44AD",
+    "Travel": "#27AE60",
+    "旅行": "#27AE60",
+    "DeepIdle Only": "#7F8C8D",
+    "纯待机": "#7F8C8D",
+    "Gaming Only": "#E74C3C",
+    "纯游戏": "#E74C3C",
+    "Video Only": "#9B59B6",
+    "纯视频": "#9B59B6",
+    "Navigation Only": "#D35400",
+    "纯导航": "#D35400",
 }
 
-# 默认颜色列表
 DEFAULT_COLORS = [
-    "#2E86AB", "#A23B72", "#F18F01", "#28A745",
-    "#DC3545", "#17A2B8", "#6C757D", "#FFC107",
-    "#6610F2", "#E83E8C", "#20C997", "#FD7E14"
+    "#2980B9", "#C0392B", "#27AE60", "#8E44AD",
+    "#D35400", "#16A085", "#2C3E50", "#7F8C8D",
 ]
 
-# 敏感度参数中文标签
 PARAM_LABELS = {
     "u": "屏幕亮度",
     "r": "刷新率",
@@ -278,56 +180,175 @@ PARAM_LABELS = {
 
 
 # =====================================================
-# 工具函数
+# Plotly 模板配置（论文优化）
+# =====================================================
+
+def setup_chinese_font():
+    """返回中文字体族（优先使用已安装的中文字体）"""
+    # 优先使用 Linux 系统安装的中文字体
+    return "WenQuanYi Micro Hei, Noto Sans CJK SC, SimHei, Microsoft YaHei, PingFang SC, Arial, sans-serif"
+
+
+def setup_style():
+    """设置全局绘图样式（针对单栏论文优化）"""
+    font_family = setup_chinese_font()
+    
+    professional_template = go.layout.Template(
+        layout=go.Layout(
+            font=dict(
+                family=font_family,
+                size=FONT_SIZES["axis_tick"],
+                color="#2C3E50"
+            ),
+            title=dict(
+                font=dict(size=FONT_SIZES["title"], color="#1A252F"),
+                x=0.5,
+                xanchor="center",
+                y=0.95,
+            ),
+            xaxis=dict(
+                showgrid=True,
+                gridwidth=LINE_WIDTHS["grid"],
+                gridcolor="rgba(127, 140, 141, 0.3)",
+                showline=True,
+                linewidth=LINE_WIDTHS["axis"],
+                linecolor="#2C3E50",
+                ticks="outside",
+                tickfont=dict(size=FONT_SIZES["axis_tick"]),
+                title_font=dict(size=FONT_SIZES["axis_title"], color="#2C3E50"),
+                zeroline=False,
+                mirror=True,
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridwidth=LINE_WIDTHS["grid"],
+                gridcolor="rgba(127, 140, 141, 0.3)",
+                showline=True,
+                linewidth=LINE_WIDTHS["axis"],
+                linecolor="#2C3E50",
+                ticks="outside",
+                tickfont=dict(size=FONT_SIZES["axis_tick"]),
+                title_font=dict(size=FONT_SIZES["axis_title"], color="#2C3E50"),
+                zeroline=False,
+                mirror=True,
+            ),
+            legend=dict(
+                font=dict(size=FONT_SIZES["legend"]),
+                bgcolor="rgba(255, 255, 255, 0.9)",
+                bordercolor="rgba(44, 62, 80, 0.5)",
+                borderwidth=1,
+            ),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            colorway=DEFAULT_COLORS,
+            margin=dict(l=50, r=20, t=50, b=45),
+            hoverlabel=dict(
+                bgcolor="white",
+                font_size=FONT_SIZES["annotation"],
+                font_family=font_family,
+            ),
+        )
+    )
+    
+    pio.templates["professional"] = professional_template
+    pio.templates.default = "professional"
+
+
+def get_monospace_font():
+    """获取等宽字体"""
+    return "Consolas, Monaco, 'Courier New', monospace"
+
+
+# =====================================================
+# 图表保存函数（论文优化）
 # =====================================================
 
 def save_figure(fig, filename, subdir="", dpi=300, close_after=False):
-    """
-    保存图表到输出目录
-    
-    参数：
-        fig : matplotlib.figure.Figure - 图表对象
-        filename : str - 文件名
-        subdir : str - 子目录名
-        dpi : int - 分辨率
-        close_after : bool - 保存后是否关闭图表
-    
-    返回：
-        str - 保存的完整路径
-    """
+    """保存 Plotly 图表（论文格式优化）"""
     save_path = get_save_path(filename, subdir)
-    fig.savefig(save_path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    ext = os.path.splitext(filename)[1].lower()
+    
+    if ext == '.html':
+        fig.write_html(
+            save_path,
+            include_plotlyjs="cdn",
+            full_html=True,
+            config={
+                'displayModeBar': True,
+                'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+                'displaylogo': False,
+            }
+        )
+    else:
+        scale = dpi / 100
+        fig.write_image(save_path, scale=scale)
+    
     print(f"[Save] 图表已保存: {save_path}")
-    
-    if close_after:
-        plt.close(fig)
-    
     return save_path
 
 
 def smart_savefig(filename, subdir="", dpi=300):
+    """兼容旧接口"""
+    if filename is None:
+        return None
+    return get_save_path(filename, subdir)
+
+
+def save_plotly_figure(fig, filename, subdir="", size_type="default"):
     """
-    智能保存当前图表
+    保存 Plotly 图表（同时保存 HTML、PNG、PDF）
     
     参数：
-        filename : str - 文件名
-        subdir : str - 子目录名（如 "basic", "monte_carlo"）
-        dpi : int - 分辨率
-    
-    返回：
-        str - 保存的完整路径
+        fig : Figure - 图表对象
+        filename : str - 文件名（不含扩展名）
+        subdir : str - 子目录名
+        size_type : str - 尺寸类型
     """
     if filename is None:
         return None
     
-    full_path = get_save_path(filename, subdir)
-    plt.savefig(full_path, dpi=dpi, bbox_inches='tight', facecolor='white')
-    print(f"[Save] 图表已保存: {full_path}")
-    return full_path
+    base_name = os.path.splitext(filename)[0]
+    width, height = FIGURE_SIZES.get(size_type, FIGURE_SIZES["default"])
+    
+    saved_paths = {}
+    
+    # HTML（交互式）
+    html_path = get_save_path(f"{base_name}.html", subdir)
+    fig.write_html(html_path, include_plotlyjs="cdn", full_html=True,
+                   config={'displayModeBar': True, 'displaylogo': False})
+    saved_paths["html"] = html_path
+    print(f"[Save] HTML: {html_path}")
+    
+    # PNG（高清）
+    png_path = get_save_path(f"{base_name}.png", subdir)
+    fig.write_image(png_path, width=width, height=height, scale=2)
+    saved_paths["png"] = png_path
+    print(f"[Save] PNG: {png_path}")
+    
+    # PDF（矢量）
+    pdf_path = get_save_path(f"{base_name}.pdf", subdir)
+    fig.write_image(pdf_path, width=width, height=height, scale=2)
+    saved_paths["pdf"] = pdf_path
+    print(f"[Save] PDF: {pdf_path}")
+    
+    return saved_paths
 
+
+# =====================================================
+# 工具函数
+# =====================================================
 
 def to_hours(time_list):
     """将秒转换为小时"""
     if isinstance(time_list, list):
         return [t / 3600 for t in time_list]
     return time_list / 3600
+
+
+def get_figure_size(size_type="default"):
+    """获取图表尺寸"""
+    return FIGURE_SIZES.get(size_type, FIGURE_SIZES["default"])
+
+
+# 初始化样式
+setup_style()

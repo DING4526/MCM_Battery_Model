@@ -1,5 +1,5 @@
 # experiments/exp_compare.py
-# 场景对比实验模块
+# 场景对比实验模块（Plotly 版本）
 
 import sys
 import os
@@ -13,11 +13,10 @@ from visualization.comparison import (
     plot_scenario_boxplot,
     plot_scenario_radar,
 )
-from visualization.config import smart_savefig
+from visualization.config import save_plotly_figure, get_output_dir
 from usage.scenario import *
 
 
-# 预定义场景组合
 SCENARIO_GROUPS = {
     "日常场景": {
         "学生日常": SCENARIO_STUDENT_DAILY_MIXED,
@@ -51,24 +50,8 @@ def run_comparison_experiment(
     verbose=True,
     output_dir="compare",
 ):
-    """
-    运行场景对比实验
+    """运行场景对比实验"""
     
-    参数：
-        scenarios : dict - 场景字典 {name: scenario_config}
-        group_name : str - 预定义场景组名称
-        n_mc : int - Monte Carlo 样本数
-        base_seed : int - 基础随机种子
-        dt : float - 时间步长（秒）
-        T_amb : float - 环境温度（K）
-        verbose : bool - 是否输出详细信息
-        output_dir : str - 输出子目录名
-    
-    返回：
-        results : dict - 对比结果
-    """
-    
-    # 获取场景
     if scenarios is None:
         if group_name is not None and group_name in SCENARIO_GROUPS:
             scenarios = SCENARIO_GROUPS[group_name]
@@ -121,24 +104,25 @@ def run_comparison_experiment(
             print(f"  {i}. {name}: {results[name]['mean']/3600:.2f} h")
         print("=" * 60)
     
-    # 独立保存每个图表
+    # 保存图表（Plotly 版本）
     if verbose:
         print("保存图表...")
     
     # 1. 场景对比柱状图
-    plot_scenario_comparison(results, show=False)
-    smart_savefig("scenario_comparison.png", output_dir)
+    fig = plot_scenario_comparison(results, show=False)
+    save_plotly_figure(fig, "scenario_comparison", output_dir, size_type="default")
     
     # 2. 场景箱线图
-    plot_scenario_boxplot(results, show=False)
-    smart_savefig("scenario_boxplot.png", output_dir)
+    fig = plot_scenario_boxplot(results, show=False)
+    save_plotly_figure(fig, "scenario_boxplot", output_dir, size_type="default")
     
     # 3. 雷达图
-    plot_scenario_radar(results, show=False)
-    smart_savefig("scenario_radar.png", output_dir)
+    fig = plot_scenario_radar(results, show=False)
+    save_plotly_figure(fig, "scenario_radar", output_dir, size_type="square")
     
     if verbose:
-        print(f"图表已保存到 output/{output_dir}/ 目录")
+        out_path = get_output_dir(output_dir)
+        print(f"图表已保存到 {out_path}/ 目录")
     
     return results
 
@@ -151,8 +135,9 @@ def run_sensitivity_to_temperature(
     verbose=True,
     output_dir="compare",
 ):
-    """运行温度敏感性分析"""
-    import matplotlib.pyplot as plt
+    """运行温度敏感性分析（Plotly 版本）"""
+    import plotly.graph_objects as go
+    from visualization.config import COLORS, LINE_WIDTHS, FONT_SIZES, FIGURE_SIZES
     
     if scenario is None:
         scenario = SCENARIO_STUDENT_DAILY_MIXED
@@ -172,19 +157,47 @@ def run_sensitivity_to_temperature(
         results["means"].append(np.mean(ttl_list) / 3600)
         results["stds"].append(np.std(ttl_list) / 3600)
     
-    # 绘制图表
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(results["temperatures"], results["means"], 'o-', color='#2E86AB', linewidth=2)
-    ax.fill_between(results["temperatures"],
-                    [m - s for m, s in zip(results["means"], results["stds"])],
-                    [m + s for m, s in zip(results["means"], results["stds"])],
-                    alpha=0.3, color='#2E86AB')
-    ax.set_xlabel("环境温度 (°C)")
-    ax.set_ylabel("续航时间 TTL (小时)")
-    ax.set_title(f"环境温度对续航时间的影响 - {scenario_name}")
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    smart_savefig("temperature_sensitivity.png", output_dir)
+    fig = go.Figure()
+    
+    # 均值线
+    fig.add_trace(go.Scatter(
+        x=results["temperatures"],
+        y=results["means"],
+        mode='lines+markers',
+        name='均值',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        marker=dict(size=8),
+    ))
+    
+    # 误差带
+    upper = [m + s for m, s in zip(results["means"], results["stds"])]
+    lower = [m - s for m, s in zip(results["means"], results["stds"])]
+    
+    fig.add_trace(go.Scatter(
+        x=results["temperatures"] + results["temperatures"][::-1],
+        y=upper + lower[::-1],
+        fill='toself',
+        fillcolor='rgba(41, 128, 185, 0.2)',
+        line=dict(color='rgba(255,255,255,0)'),
+        name='±1σ',
+        showlegend=True,
+    ))
+    
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(
+            text=f"环境温度对续航时间的影响 - {scenario_name}",
+            font=dict(size=FONT_SIZES["title"]),
+        ),
+        xaxis_title="环境温度 (°C)",
+        yaxis_title="续航时间 TTL (小时)",
+        width=width,
+        height=height,
+        legend=dict(font=dict(size=FONT_SIZES["legend"])),
+        margin=dict(l=50, r=20, t=50, b=45),
+    )
+    
+    save_plotly_figure(fig, "temperature_sensitivity", output_dir, size_type="default")
     
     return results
 

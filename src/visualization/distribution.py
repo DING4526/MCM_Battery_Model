@@ -1,311 +1,401 @@
 # visualization/distribution.py
-# TTL 分布可视化模块
+# 分布可视化模块（Plotly 版本 - 单栏论文优化）
 #
-# 提供多种分布可视化方式：
+# 提供专业的分布可视化：
 # - 直方图
 # - 箱线图
 # - 小提琴图
 # - 核密度估计
-# - 综合统计摘要图
+# - 综合统计摘要
 
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import numpy as np
 from scipy import stats
 
-# 从统一配置模块导入
 from .config import (
-    setup_style as _setup_style,
-    COLORS,
-    to_hours as _to_hours,
-    save_figure,
-    get_save_path,
-    smart_savefig,
-    get_show_plots,
+    COLORS, DEFAULT_COLORS,
+    FONT_SIZES, LINE_WIDTHS, FIGURE_SIZES,
+    to_hours, get_show_plots, save_plotly_figure,
+    setup_style,
 )
+
+setup_style()
 
 
 # =====================================================
-# 基础分布可视化
+# TTL 分布直方图
 # =====================================================
 
 def plot_ttl_distribution(ttl_list, filename=None, subdir="", ax=None, show=None, save_path=None, bins=20):
     """
     绘制 TTL 分布直方图
-    
-    参数：
-        ttl_list : list - TTL 列表（秒）
-        filename : str - 保存文件名
-        subdir : str - 输出子目录
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 兼容旧接口
-        bins : int - 直方图区间数
     """
-    _setup_style()
+    ttl_h = to_hours(ttl_list)
     
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
+    fig = go.Figure()
     
-    ttl_h = _to_hours(ttl_list)
+    # 直方图
+    fig.add_trace(go.Histogram(
+        x=ttl_h,
+        nbinsx=bins,
+        name='TTL 分布',
+        marker=dict(
+            color=COLORS["accent"],
+            line=dict(color='white', width=1),
+        ),
+        opacity=0.75,
+        hovertemplate='TTL: %{x:.2f} h<br>频数: %{y}<extra></extra>'
+    ))
     
-    # 绘制直方图
-    n, bins_edges, patches = ax.hist(ttl_h, bins=bins, edgecolor='white', 
-                                      color=COLORS["primary"], alpha=0.7)
-    
-    # 添加核密度估计曲线
+    # KDE 曲线
     kde = stats.gaussian_kde(ttl_h)
-    x_range = np.linspace(min(ttl_h), max(ttl_h), 100)
-    ax.plot(x_range, kde(x_range) * len(ttl_h) * (bins_edges[1] - bins_edges[0]), 
-            color=COLORS["secondary"], linewidth=2, label="核密度估计")
+    x_range = np.linspace(min(ttl_h) - 0.2, max(ttl_h) + 0.2, 150)
+    kde_values = kde(x_range)
     
-    # 添加统计线
-    mean_ttl = np.mean(ttl_h)
-    median_ttl = np.median(ttl_h)
+    hist_counts, _ = np.histogram(ttl_h, bins=bins)
+    bin_width = (max(ttl_h) - min(ttl_h)) / bins
+    scale_factor = max(hist_counts) / max(kde_values) if max(kde_values) > 0 else 1
     
-    ax.axvline(x=mean_ttl, color=COLORS["accent"], linestyle='--', linewidth=2, 
-               label=f"均值: {mean_ttl:.2f} h")
-    ax.axvline(x=median_ttl, color=COLORS["success"], linestyle=':', linewidth=2, 
-               label=f"中位数: {median_ttl:.2f} h")
+    fig.add_trace(go.Scatter(
+        x=x_range,
+        y=kde_values * scale_factor,
+        mode='lines',
+        name='核密度估计',
+        line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
+        hoverinfo='skip',
+    ))
     
-    ax.set_xlabel("续航时间 TTL (小时)", fontsize=11)
-    ax.set_ylabel("频数", fontsize=11)
-    ax.set_title("Monte Carlo 仿真 TTL 分布", fontsize=13, fontweight='bold')
-    ax.legend(loc='upper right', fontsize=9)
-    ax.grid(True, alpha=0.3)
+    # 统计线
+    mean_val = np.mean(ttl_h)
+    median_val = np.median(ttl_h)
     
-    plt.tight_layout()
+    fig.add_vline(x=mean_val, line_dash="dash", line_color=COLORS["warning"],
+                  line_width=LINE_WIDTHS["secondary"],
+                  annotation_text=f"均值: {mean_val:.2f} h",
+                  annotation_position="top",
+                  annotation_font_size=FONT_SIZES["annotation"])
     
-    if filename:
-        smart_savefig(filename, subdir)
-    elif save_path:
-        smart_savefig(save_path)
+    fig.add_vline(x=median_val, line_dash="dot", line_color=COLORS["success"],
+                  line_width=LINE_WIDTHS["secondary"],
+                  annotation_text=f"中位数: {median_val:.2f} h",
+                  annotation_position="top left",
+                  annotation_font_size=FONT_SIZES["annotation"])
+    
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(text="Monte Carlo TTL 分布", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="续航时间 TTL (小时)",
+        yaxis_title="频数",
+        width=width,
+        height=height,
+        bargap=0.05,
+        showlegend=False,
+        margin=dict(l=50, r=20, t=50, b=45),
+    )
+    
+    # 统计信息
+    std_val = np.std(ttl_h)
+    fig.add_annotation(
+        x=0.98, y=0.95, xref="paper", yref="paper",
+        text=f"<b>统计摘要</b><br>n={len(ttl_h)}<br>μ={mean_val:.3f} h<br>σ={std_val:.3f} h",
+        showarrow=False,
+        font=dict(size=FONT_SIZES["annotation"]),
+        bgcolor="rgba(255,255,255,0.9)",
+        bordercolor=COLORS["neutral"],
+        borderwidth=1,
+        borderpad=4,
+        align="left",
+        xanchor="right", yanchor="top",
+    )
+    
+    path = filename or save_path
+    if path:
+        save_plotly_figure(fig, path, subdir, size_type="default")
     
     if show is None:
         show = get_show_plots()
     if show:
-        plt.show()
+        fig.show()
     
-    return ax
+    return fig
 
+
+# =====================================================
+# TTL 箱线图
+# =====================================================
 
 def plot_ttl_boxplot(ttl_list, ax=None, show=True, save_path=None, label="TTL"):
     """
     绘制 TTL 箱线图
-    
-    参数：
-        ttl_list : list - TTL 列表（秒）
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
-        label : str - 标签名称
     """
-    _setup_style()
+    ttl_h = to_hours(ttl_list)
     
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 6))
+    fig = go.Figure()
     
-    ttl_h = _to_hours(ttl_list)
+    fig.add_trace(go.Box(
+        y=ttl_h,
+        name=label,
+        marker=dict(color=COLORS["accent"], outliercolor=COLORS["secondary"]),
+        boxmean='sd',
+        fillcolor='rgba(41, 128, 185, 0.4)',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        hovertemplate='%{y:.2f} h<extra></extra>',
+    ))
     
-    # 箱线图
-    bp = ax.boxplot(ttl_h, patch_artist=True, labels=[label])
+    # 散点（抖动）
+    jitter = np.random.normal(0, 0.03, size=len(ttl_h))
+    fig.add_trace(go.Scatter(
+        x=jitter,
+        y=ttl_h,
+        mode='markers',
+        name='数据点',
+        marker=dict(color=COLORS["secondary"], size=4, opacity=0.4),
+        showlegend=False,
+        hoverinfo='skip',
+    ))
     
-    # 设置颜色
-    bp['boxes'][0].set_facecolor(COLORS["primary"])
-    bp['boxes'][0].set_alpha(0.7)
-    bp['medians'][0].set_color(COLORS["accent"])
-    bp['medians'][0].set_linewidth(2)
-    
-    # 添加散点（抖动）
-    jitter = np.random.normal(0, 0.04, size=len(ttl_h))
-    ax.scatter(1 + jitter, ttl_h, alpha=0.3, color=COLORS["secondary"], s=20)
-    
-    # 添加统计标注
+    # 均值
     mean_val = np.mean(ttl_h)
-    ax.scatter([1], [mean_val], color=COLORS["success"], marker='D', s=100, 
-               zorder=5, label=f"均值: {mean_val:.2f} h")
+    fig.add_trace(go.Scatter(
+        x=[0], y=[mean_val],
+        mode='markers',
+        name=f'均值: {mean_val:.2f} h',
+        marker=dict(color=COLORS["success"], size=10, symbol='diamond',
+                   line=dict(color='white', width=1.5)),
+    ))
     
-    ax.set_ylabel("续航时间 TTL (小时)", fontsize=11)
-    ax.set_title("TTL 分布箱线图", fontsize=13, fontweight='bold')
-    ax.legend(loc='upper right', fontsize=9)
-    ax.grid(True, alpha=0.3, axis='y')
+    width, height = FIGURE_SIZES["square"]
+    fig.update_layout(
+        title=dict(text="TTL 分布箱线图", font=dict(size=FONT_SIZES["title"])),
+        yaxis_title="续航时间 TTL (小时)",
+        xaxis=dict(showticklabels=False, zeroline=False),
+        width=width,
+        height=height,
+        margin=dict(l=50, r=20, t=50, b=45),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="square")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# TTL 小提琴图
+# =====================================================
 
 def plot_ttl_violin(ttl_list, ax=None, show=True, save_path=None, label="TTL"):
     """
     绘制 TTL 小提琴图
-    
-    参数：
-        ttl_list : list - TTL 列表（秒）
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
-        label : str - 标签名称
     """
-    _setup_style()
+    ttl_h = to_hours(ttl_list)
     
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 6))
+    fig = go.Figure()
     
-    ttl_h = _to_hours(ttl_list)
+    fig.add_trace(go.Violin(
+        y=ttl_h,
+        name=label,
+        box_visible=True,
+        meanline_visible=True,
+        fillcolor='rgba(41, 128, 185, 0.4)',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        points='all',
+        pointpos=-0.5,
+        jitter=0.3,
+        marker=dict(color=COLORS["secondary"], size=3, opacity=0.4),
+        hovertemplate='%{y:.2f} h<extra></extra>',
+    ))
     
-    # 小提琴图
-    parts = ax.violinplot(ttl_h, positions=[1], showmeans=True, showmedians=True)
+    width, height = FIGURE_SIZES["square"]
+    fig.update_layout(
+        title=dict(text="TTL 分布小提琴图", font=dict(size=FONT_SIZES["title"])),
+        yaxis_title="续航时间 TTL (小时)",
+        xaxis=dict(showticklabels=False),
+        width=width,
+        height=height,
+        margin=dict(l=50, r=20, t=50, b=45),
+    )
     
-    # 设置颜色
-    for pc in parts['bodies']:
-        pc.set_facecolor(COLORS["primary"])
-        pc.set_alpha(0.7)
-    parts['cmeans'].set_color(COLORS["accent"])
-    parts['cmedians'].set_color(COLORS["secondary"])
-    
-    # 添加散点
-    jitter = np.random.normal(0, 0.04, size=len(ttl_h))
-    ax.scatter(1 + jitter, ttl_h, alpha=0.3, color=COLORS["neutral"], s=15)
-    
-    ax.set_xticks([1])
-    ax.set_xticklabels([label])
-    ax.set_ylabel("续航时间 TTL (小时)", fontsize=11)
-    ax.set_title("TTL 分布小提琴图", fontsize=13, fontweight='bold')
-    ax.grid(True, alpha=0.3, axis='y')
+    # 统计信息
+    mean_val = np.mean(ttl_h)
+    std_val = np.std(ttl_h)
+    fig.add_annotation(
+        x=0.98, y=0.95, xref="paper", yref="paper",
+        text=f"<b>分布特征</b><br>μ={mean_val:.3f} h<br>σ={std_val:.3f} h<br>偏度={stats.skew(ttl_h):.3f}",
+        showarrow=False,
+        font=dict(size=FONT_SIZES["annotation"]),
+        bgcolor="rgba(255,255,255,0.9)",
+        bordercolor=COLORS["neutral"],
+        borderwidth=1,
+        borderpad=4,
+        align="left",
+        xanchor="right", yanchor="top",
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="square")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# TTL 核密度估计图
+# =====================================================
 
 def plot_ttl_kde(ttl_list, ax=None, show=True, save_path=None, fill=True):
     """
     绘制 TTL 核密度估计图
-    
-    参数：
-        ttl_list : list - TTL 列表（秒）
-        ax : matplotlib.axes.Axes - 可选的绑定轴
-        show : bool - 是否显示图形
-        save_path : str - 保存路径
-        fill : bool - 是否填充曲线下区域
     """
-    _setup_style()
+    ttl_h = to_hours(ttl_list)
     
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-    
-    ttl_h = _to_hours(ttl_list)
-    
-    # 核密度估计
     kde = stats.gaussian_kde(ttl_h)
     x_range = np.linspace(min(ttl_h) - 0.5, max(ttl_h) + 0.5, 200)
     density = kde(x_range)
     
-    # 绘制 KDE 曲线
-    ax.plot(x_range, density, color=COLORS["primary"], linewidth=2.5, label="核密度估计")
+    fig = go.Figure()
     
-    if fill:
-        ax.fill_between(x_range, density, alpha=0.3, color=COLORS["primary"])
+    fill_mode = 'tozeroy' if fill else None
+    fig.add_trace(go.Scatter(
+        x=x_range,
+        y=density,
+        mode='lines',
+        name='核密度估计',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        fill=fill_mode,
+        fillcolor='rgba(41, 128, 185, 0.25)',
+        hovertemplate='TTL: %{x:.2f} h<br>密度: %{y:.4f}<extra></extra>',
+    ))
     
-    # 添加数据点（rug plot）
-    ax.scatter(ttl_h, np.zeros_like(ttl_h) - 0.01 * max(density), 
-               alpha=0.5, color=COLORS["secondary"], s=10, marker='|')
+    # Rug plot
+    fig.add_trace(go.Scatter(
+        x=ttl_h,
+        y=[-0.01 * max(density)] * len(ttl_h),
+        mode='markers',
+        name='数据点',
+        marker=dict(color=COLORS["secondary"], size=6, symbol='line-ns-open', opacity=0.5),
+        showlegend=False,
+        hoverinfo='skip',
+    ))
     
-    # 添加统计信息
-    mean_ttl = np.mean(ttl_h)
-    std_ttl = np.std(ttl_h)
+    # 统计线
+    mean_val = np.mean(ttl_h)
+    std_val = np.std(ttl_h)
     
-    ax.axvline(x=mean_ttl, color=COLORS["accent"], linestyle='--', linewidth=2, 
-               label=f"均值: {mean_ttl:.2f} h")
-    ax.axvline(x=mean_ttl - std_ttl, color=COLORS["neutral"], linestyle=':', linewidth=1.5, 
-               label=f"±1σ: [{mean_ttl-std_ttl:.2f}, {mean_ttl+std_ttl:.2f}]")
-    ax.axvline(x=mean_ttl + std_ttl, color=COLORS["neutral"], linestyle=':', linewidth=1.5)
+    fig.add_vline(x=mean_val, line_dash="dash", line_color=COLORS["warning"],
+                  line_width=LINE_WIDTHS["secondary"],
+                  annotation_text=f"μ={mean_val:.2f} h",
+                  annotation_position="top",
+                  annotation_font_size=FONT_SIZES["annotation"])
     
-    ax.set_xlabel("续航时间 TTL (小时)", fontsize=11)
-    ax.set_ylabel("概率密度", fontsize=11)
-    ax.set_title("TTL 核密度估计分布", fontsize=13, fontweight='bold')
-    ax.legend(loc='upper right', fontsize=9)
-    ax.grid(True, alpha=0.3)
-    ax.set_ylim(bottom=0)
+    # ±1σ 区域
+    fig.add_vrect(
+        x0=mean_val - std_val, x1=mean_val + std_val,
+        fillcolor="rgba(243, 156, 18, 0.08)",
+        line_width=0,
+    )
+    
+    width, height = FIGURE_SIZES["default"]
+    fig.update_layout(
+        title=dict(text="TTL 核密度估计分布", font=dict(size=FONT_SIZES["title"])),
+        xaxis_title="续航时间 TTL (小时)",
+        yaxis_title="概率密度",
+        yaxis=dict(rangemode='tozero'),
+        width=width,
+        height=height,
+        margin=dict(l=50, r=20, t=50, b=45),
+    )
     
     if save_path:
-        smart_savefig(save_path)
-    if show:
-        plt.tight_layout()
-        plt.show()
+        save_plotly_figure(fig, save_path, size_type="default")
     
-    return ax
+    if show and get_show_plots():
+        fig.show()
+    
+    return fig
 
+
+# =====================================================
+# TTL 综合统计摘要
+# =====================================================
 
 def plot_ttl_statistical_summary(ttl_list, filename=None, subdir="", save_path=None, show=None):
     """
     绘制 TTL 综合统计摘要图
-    
-    参数：
-        ttl_list : list - TTL 列表（秒）
-        filename : str - 保存文件名
-        subdir : str - 输出子目录
-        save_path : str - 兼容旧接口
-        show : bool - 是否显示图形，None 则使用全局设置
     """
-    _setup_style()
+    ttl_h = to_hours(ttl_list)
     
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=("分布直方图 + KDE", "箱线图", "Q-Q 图", "统计报告"),
+        specs=[
+            [{"type": "xy"}, {"type": "xy"}],
+            [{"type": "xy"}, {"type": "table"}],
+        ],
+        vertical_spacing=0.12,
+        horizontal_spacing=0.1,
+    )
     
-    ttl_h = _to_hours(ttl_list)
+    # 1. 直方图 + KDE
+    fig.add_trace(go.Histogram(
+        x=ttl_h, nbinsx=20,
+        marker=dict(color=COLORS["accent"], line=dict(color='white', width=1)),
+        opacity=0.7, histnorm='probability density',
+        showlegend=False,
+    ), row=1, col=1)
     
-    # ===== 左上：直方图 + KDE =====
-    ax1 = axes[0, 0]
-    n, bins_edges, patches = ax1.hist(ttl_h, bins=20, edgecolor='white', 
-                                       color=COLORS["primary"], alpha=0.7, density=True)
     kde = stats.gaussian_kde(ttl_h)
-    x_range = np.linspace(min(ttl_h), max(ttl_h), 100)
-    ax1.plot(x_range, kde(x_range), color=COLORS["secondary"], linewidth=2)
-    ax1.set_xlabel("续航时间 TTL (小时)")
-    ax1.set_ylabel("概率密度")
-    ax1.set_title("TTL 分布直方图", fontweight='bold')
-    ax1.grid(True, alpha=0.3)
+    x_range = np.linspace(min(ttl_h) - 0.3, max(ttl_h) + 0.3, 100)
+    fig.add_trace(go.Scatter(
+        x=x_range, y=kde(x_range),
+        mode='lines', line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
+        showlegend=False,
+    ), row=1, col=1)
     
-    # ===== 右上：箱线图 + 散点 =====
-    ax2 = axes[0, 1]
-    bp = ax2.boxplot(ttl_h, patch_artist=True, vert=True, positions=[1])
-    bp['boxes'][0].set_facecolor(COLORS["primary"])
-    bp['boxes'][0].set_alpha(0.7)
-    bp['medians'][0].set_color(COLORS["accent"])
-    bp['medians'][0].set_linewidth(2)
+    # 2. 箱线图
+    fig.add_trace(go.Box(
+        y=ttl_h, name='TTL', boxmean='sd',
+        fillcolor='rgba(41, 128, 185, 0.4)',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        showlegend=False,
+    ), row=1, col=2)
     
-    jitter = np.random.normal(0, 0.04, size=len(ttl_h))
-    ax2.scatter(1 + jitter, ttl_h, alpha=0.3, color=COLORS["secondary"], s=20)
-    ax2.set_xticks([1])
-    ax2.set_xticklabels(["TTL"])
-    ax2.set_ylabel("续航时间 (小时)")
-    ax2.set_title("TTL 箱线图", fontweight='bold')
-    ax2.grid(True, alpha=0.3, axis='y')
+    jitter = np.random.normal(0, 0.02, size=len(ttl_h))
+    fig.add_trace(go.Scatter(
+        x=jitter, y=ttl_h, mode='markers',
+        marker=dict(color=COLORS["secondary"], size=3, opacity=0.4),
+        showlegend=False, hoverinfo='skip',
+    ), row=1, col=2)
     
-    # ===== 左下：QQ 图 =====
-    ax3 = axes[1, 0]
-    stats.probplot(ttl_h, dist="norm", plot=ax3)
-    ax3.set_title("Q-Q 图（正态性检验）", fontweight='bold')
-    ax3.get_lines()[0].set_markerfacecolor(COLORS["primary"])
-    ax3.get_lines()[0].set_alpha(0.6)
-    ax3.get_lines()[1].set_color(COLORS["accent"])
-    ax3.grid(True, alpha=0.3)
+    # 3. Q-Q 图
+    sorted_data = np.sort(ttl_h)
+    theoretical_quantiles = stats.norm.ppf(np.linspace(0.01, 0.99, len(ttl_h)))
     
-    # ===== 右下：统计信息面板 =====
-    ax4 = axes[1, 1]
-    ax4.axis('off')
+    fig.add_trace(go.Scatter(
+        x=theoretical_quantiles, y=sorted_data,
+        mode='markers',
+        marker=dict(color=COLORS["accent"], size=5, opacity=0.6),
+        showlegend=False,
+    ), row=2, col=1)
     
-    # 计算统计量
-    n_samples = len(ttl_h)
     mean_val = np.mean(ttl_h)
     std_val = np.std(ttl_h)
+    ref_x = np.array([min(theoretical_quantiles), max(theoretical_quantiles)])
+    ref_y = mean_val + std_val * ref_x
+    fig.add_trace(go.Scatter(
+        x=ref_x, y=ref_y, mode='lines',
+        line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["secondary"], dash='dash'),
+        showlegend=False,
+    ), row=2, col=1)
+    
+    # 4. 统计表格
+    n_samples = len(ttl_h)
     min_val = np.min(ttl_h)
     max_val = np.max(ttl_h)
     median_val = np.median(ttl_h)
@@ -315,65 +405,65 @@ def plot_ttl_statistical_summary(ttl_list, filename=None, subdir="", save_path=N
     skewness = stats.skew(ttl_h)
     kurtosis = stats.kurtosis(ttl_h)
     
-    # Shapiro-Wilk 正态性检验
     if n_samples <= 5000:
         _, p_value = stats.shapiro(ttl_h)
     else:
         _, p_value = stats.normaltest(ttl_h)
     
-    # 95% 置信区间
     ci_low = mean_val - 1.96 * std_val / np.sqrt(n_samples)
     ci_high = mean_val + 1.96 * std_val / np.sqrt(n_samples)
     
-    # 使用纯ASCII边框，兼容性更好
-    stats_text = f"""
-    +==========================================+
-    |       [Stats] 统 计 分 析 报 告         |
-    +==========================================+
-    |  样本数量:          {n_samples:>8}              |
-    |                                          |
-    |  ------- 中心趋势 -------                |
-    |  均值 (Mean):        {mean_val:>8.3f} h          |
-    |  中位数 (Median):    {median_val:>8.3f} h          |
-    |  95% 置信区间:  [{ci_low:.3f}, {ci_high:.3f}] h   |
-    |                                          |
-    |  ------- 离散程度 -------                |
-    |  标准差 (Std):       {std_val:>8.3f} h          |
-    |  变异系数 (CV):      {std_val/mean_val*100:>8.2f} %          |
-    |  四分位距 (IQR):     {iqr:>8.3f} h          |
-    |                                          |
-    |  ------- 范围 -------                    |
-    |  最小值 (Min):       {min_val:>8.3f} h          |
-    |  最大值 (Max):       {max_val:>8.3f} h          |
-    |  Q1 (25%):           {q1:>8.3f} h          |
-    |  Q3 (75%):           {q3:>8.3f} h          |
-    |                                          |
-    |  ------- 分布形态 -------                |
-    |  偏度 (Skewness):    {skewness:>8.3f}            |
-    |  峰度 (Kurtosis):    {kurtosis:>8.3f}            |
-    |  正态性检验 p值:     {p_value:>8.4f}            |
-    +==========================================+
-    """
+    fig.add_trace(go.Table(
+        header=dict(
+            values=["<b>指标</b>", "<b>数值</b>"],
+            fill_color=COLORS["accent"],
+            font=dict(color='white', size=FONT_SIZES["axis_tick"]),
+            align='center', height=24,
+        ),
+        cells=dict(
+            values=[
+                ["样本数", "均值", "中位数", "标准差", "CV(%)", "最小值", "最大值",
+                 "Q1", "Q3", "IQR", "偏度", "峰度", "正态性 p", "95% CI"],
+                [f"{n_samples}", f"{mean_val:.4f}", f"{median_val:.4f}",
+                 f"{std_val:.4f}", f"{std_val/mean_val*100:.2f}",
+                 f"{min_val:.4f}", f"{max_val:.4f}",
+                 f"{q1:.4f}", f"{q3:.4f}", f"{iqr:.4f}",
+                 f"{skewness:.4f}", f"{kurtosis:.4f}",
+                 f"{p_value:.4f}", f"[{ci_low:.3f}, {ci_high:.3f}]"]
+            ],
+            fill_color=['rgba(236, 240, 241, 0.8)', 'white'],
+            font=dict(size=FONT_SIZES["annotation"]),
+            align=['left', 'center'], height=20,
+        )
+    ), row=2, col=2)
     
-    ax4.text(0.05, 0.5, stats_text, transform=ax4.transAxes, fontsize=10,
-             verticalalignment='center',
-             bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+    # 布局
+    fig.update_xaxes(title_text="TTL (h)", row=1, col=1)
+    fig.update_yaxes(title_text="概率密度", row=1, col=1)
+    fig.update_xaxes(showticklabels=False, row=1, col=2)
+    fig.update_yaxes(title_text="TTL (h)", row=1, col=2)
+    fig.update_xaxes(title_text="理论分位数", row=2, col=1)
+    fig.update_yaxes(title_text="样本分位数", row=2, col=1)
     
-    # 总标题
-    fig.suptitle(f"[MC] Monte Carlo 仿真 TTL 统计分析 (n={n_samples})", 
-                 fontsize=14, fontweight='bold', y=1.02)
+    width, height = FIGURE_SIZES["tall"]
+    fig.update_layout(
+        title=dict(
+            text=f"Monte Carlo TTL 统计分析 (n={n_samples})",
+            font=dict(size=FONT_SIZES["title"]),
+        ),
+        width=width + 100,
+        height=height + 150,
+        showlegend=False,
+        margin=dict(l=50, r=20, t=60, b=45),
+    )
     
-    plt.tight_layout()
+    path = filename or save_path
+    if path:
+        save_plotly_figure(fig, path, subdir, size_type="tall")
     
-    if filename:
-        smart_savefig(filename, subdir)
-    elif save_path:
-        smart_savefig(save_path)
-    
-    # 使用参数或全局设置决定是否显示
     if show is None:
         show = get_show_plots()
     if show:
-        plt.show()
+        fig.show()
     
     return fig

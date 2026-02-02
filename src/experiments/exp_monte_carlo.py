@@ -1,5 +1,5 @@
 # experiments/exp_monte_carlo.py
-# Monte Carlo 仿真实验模块
+# Monte Carlo 仿真实验模块（Plotly 版本）
 
 import sys
 import os
@@ -14,7 +14,7 @@ from visualization.distribution import (
     plot_ttl_violin,
     plot_ttl_kde,
 )
-from visualization.config import smart_savefig
+from visualization.config import save_plotly_figure, get_output_dir
 from usage.scenario import *
 
 
@@ -30,19 +30,6 @@ def run_monte_carlo_experiment(
 ):
     """
     运行 Monte Carlo 仿真实验
-    
-    参数：
-        scenario : dict - 使用场景配置
-        scenario_name : str - 场景名称
-        n_samples : int - 仿真次数
-        base_seed : int - 基础随机种子
-        dt : float - 时间步长（秒）
-        T_amb : float - 环境温度（K）
-        verbose : bool - 是否输出详细信息
-        output_dir : str - 输出子目录名
-    
-    返回：
-        results : dict - 仿真结果
     """
     
     if scenario is None:
@@ -88,28 +75,29 @@ def run_monte_carlo_experiment(
         print(f"   范围: [{results['min']/3600:.2f}, {results['max']/3600:.2f}] 小时")
         print("=" * 60)
     
-    # 独立保存每个图表
+    # 保存图表（Plotly 版本）
     if verbose:
         print("保存图表...")
     
     # 1. TTL 分布直方图
-    plot_ttl_distribution(ttl_list, show=False)
-    smart_savefig("ttl_histogram.png", output_dir)
+    fig = plot_ttl_distribution(ttl_list, show=False)
+    save_plotly_figure(fig, "ttl_histogram", output_dir, size_type="default")
     
     # 2. 箱线图
-    plot_ttl_boxplot(ttl_list, show=False)
-    smart_savefig("ttl_boxplot.png", output_dir)
+    fig = plot_ttl_boxplot(ttl_list, show=False)
+    save_plotly_figure(fig, "ttl_boxplot", output_dir, size_type="square")
     
     # 3. 小提琴图
-    plot_ttl_violin(ttl_list, show=False)
-    smart_savefig("ttl_violin.png", output_dir)
+    fig = plot_ttl_violin(ttl_list, show=False)
+    save_plotly_figure(fig, "ttl_violin", output_dir, size_type="square")
     
     # 4. 核密度估计
-    plot_ttl_kde(ttl_list, show=False)
-    smart_savefig("ttl_kde.png", output_dir)
+    fig = plot_ttl_kde(ttl_list, show=False)
+    save_plotly_figure(fig, "ttl_kde", output_dir, size_type="default")
     
     if verbose:
-        print(f"图表已保存到 output/{output_dir}/ 目录")
+        out_path = get_output_dir(output_dir)
+        print(f"图表已保存到 {out_path}/ 目录")
     
     return results
 
@@ -123,8 +111,10 @@ def run_convergence_analysis(
     verbose=True,
     output_dir="monte_carlo",
 ):
-    """运行收敛性分析"""
-    import matplotlib.pyplot as plt
+    """运行收敛性分析（Plotly 版本）"""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    from visualization.config import COLORS, LINE_WIDTHS, FONT_SIZES, FIGURE_SIZES
     
     if scenario is None:
         scenario = SCENARIO_STUDENT_DAILY_MIXED
@@ -145,22 +135,43 @@ def run_convergence_analysis(
         stds.append(np.std(ttl_subset) / 3600)
     
     # 绘制收敛图
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=("均值收敛性", "标准差稳定性"),
+        horizontal_spacing=0.12,
+    )
     
-    axes[0].plot(sample_sizes, means, 'b-', linewidth=2)
-    axes[0].set_xlabel("样本数")
-    axes[0].set_ylabel("TTL 均值 (小时)")
-    axes[0].set_title("均值收敛性")
-    axes[0].grid(True, alpha=0.3)
+    fig.add_trace(go.Scatter(
+        x=sample_sizes, y=means,
+        mode='lines+markers',
+        line=dict(color=COLORS["accent"], width=LINE_WIDTHS["main"]),
+        marker=dict(size=5),
+        name='均值',
+    ), row=1, col=1)
     
-    axes[1].plot(sample_sizes, stds, 'g-', linewidth=2)
-    axes[1].set_xlabel("样本数")
-    axes[1].set_ylabel("TTL 标准差 (小时)")
-    axes[1].set_title("标准差稳定性")
-    axes[1].grid(True, alpha=0.3)
+    fig.add_trace(go.Scatter(
+        x=sample_sizes, y=stds,
+        mode='lines+markers',
+        line=dict(color=COLORS["success"], width=LINE_WIDTHS["main"]),
+        marker=dict(size=5),
+        name='标准差',
+    ), row=1, col=2)
     
-    plt.tight_layout()
-    smart_savefig("convergence.png", output_dir)
+    fig.update_xaxes(title_text="样本数", row=1, col=1)
+    fig.update_yaxes(title_text="TTL 均值 (小时)", row=1, col=1)
+    fig.update_xaxes(title_text="样本数", row=1, col=2)
+    fig.update_yaxes(title_text="TTL 标准差 (小时)", row=1, col=2)
+    
+    width, height = FIGURE_SIZES["wide"]
+    fig.update_layout(
+        title=dict(text="Monte Carlo 收敛性分析", font=dict(size=FONT_SIZES["title"])),
+        width=width + 100,
+        height=height,
+        showlegend=False,
+        margin=dict(l=50, r=20, t=60, b=45),
+    )
+    
+    save_plotly_figure(fig, "convergence", output_dir, size_type="wide")
     
     return {"sample_sizes": sample_sizes, "means": means, "stds": stds}
 

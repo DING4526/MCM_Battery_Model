@@ -1,5 +1,5 @@
 # experiments/exp_basic.py
-# 基础单次仿真实验模块
+# 基础单次仿真实验模块（Plotly 版本）
 
 import sys
 import os
@@ -15,7 +15,7 @@ from visualization.timeseries import (
     plot_composite_power_temperature,
     plot_soc_comparison,
 )
-from visualization.config import smart_savefig
+from visualization.config import save_plotly_figure, get_output_dir
 from usage.scenario import *
 
 
@@ -65,8 +65,8 @@ def run_basic_experiment(
         T_amb=T_amb,
         seed=seed,
         record=True,
-        record_breakdown=True,      # 记录子模块功耗分解
-        record_uncorrected=True,    # 记录无修正版本 SOC
+        record_breakdown=True,
+        record_uncorrected=True,
     )
     
     ttl_hours = result["TTL"] / 3600
@@ -85,44 +85,43 @@ def run_basic_experiment(
         
         print("=" * 60)
     
-    # 独立保存每个图表
+    # 保存图表（Plotly 版本）
     if verbose:
         print("保存图表...")
     
     # 1. SOC 曲线
-    plot_soc_curve(result, show=False)
-    smart_savefig("soc_curve.png", output_dir)
+    fig = plot_soc_curve(result, show=False)
+    save_plotly_figure(fig, "soc_curve", output_dir, size_type="wide")
     
     # 2. 功耗曲线
-    plot_power_curve(result, show=False)
-    smart_savefig("power_curve.png", output_dir)
+    fig = plot_power_curve(result, show=False)
+    save_plotly_figure(fig, "power_curve", output_dir, size_type="wide")
     
     # 3. 温度曲线
-    plot_temperature_curve(result, T_amb=T_amb, show=False)
-    smart_savefig("temperature_curve.png", output_dir)
+    fig = plot_temperature_curve(result, T_amb=T_amb, show=False)
+    save_plotly_figure(fig, "temperature_curve", output_dir, size_type="wide")
     
     # 4. 状态时间线
-    plot_state_timeline(result, show=False)
-    smart_savefig("state_timeline.png", output_dir)
+    fig = plot_state_timeline(result, show=False)
+    save_plotly_figure(fig, "state_timeline", output_dir, size_type="timeline")
     
-    # ===== 新增复合图表 =====
+    # 5. 复合图表：温度 + 功耗堆叠图 + 状态时间线
+    fig = plot_composite_power_temperature(result, T_amb=T_amb, show=False)
+    save_plotly_figure(fig, "composite_power_temperature", output_dir, size_type="composite")
     
-    # 5. 复合图表1：温度 + 功耗堆叠图 + 状态时间线
-    plot_composite_power_temperature(result, T_amb=T_amb, show=False)
-    smart_savefig("composite_power_temperature.png", output_dir)
-    
-    # 6. 复合图表2：SOC 对比（带修正 vs 无修正）
-    plot_soc_comparison(result, show=False)
-    smart_savefig("soc_comparison.png", output_dir)
+    # 6. SOC 对比（各修正因子效果）
+    fig = plot_soc_comparison(result, show=False)
+    save_plotly_figure(fig, "soc_comparison", output_dir, size_type="default")
     
     if verbose:
-        print(f"图表已保存到 output/{output_dir}/ 目录")
-        print("  - soc_curve.png")
-        print("  - power_curve.png")
-        print("  - temperature_curve.png")
-        print("  - state_timeline.png")
-        print("  - composite_power_temperature.png  (新增复合图表)")
-        print("  - soc_comparison.png               (新增复合图表)")
+        out_path = get_output_dir(output_dir)
+        print(f"图表已保存到 {out_path}/ 目录")
+        print("  - soc_curve.{html,png,pdf}")
+        print("  - power_curve.{html,png,pdf}")
+        print("  - temperature_curve.{html,png,pdf}")
+        print("  - state_timeline.{html,png,pdf}")
+        print("  - composite_power_temperature.{html,png,pdf}")
+        print("  - soc_comparison.{html,png,pdf}")
     
     return result
 
