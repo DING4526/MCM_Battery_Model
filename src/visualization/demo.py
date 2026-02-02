@@ -1,12 +1,12 @@
 """
-Example usage / quick sanity check.
+Unified plotting entry for:
+01 - Lifetime Distribution
 
-By default this script reads summary.csv (runner output) and generates figures
-with data-driven key thresholds. If summary.csv is missing, it falls back to
-synthetic data.
-
-Run:
-    python -m visualization.demo --summary summary.csv
+Generates:
+- Overall lifetime distribution (KDE / ECDF)
+- Stratified by Active Usage Intensity (mainline result)
+- Stratified by Device Aging
+- Supporting figure: Usage composition within intensity groups
 """
 
 from __future__ import annotations
@@ -21,236 +21,316 @@ from .lifetime_distribution import (
     plot_population_lifetime_distribution,
     LifetimePlotConfig,
 )
+from .usage_composition import (
+    plot_active_composition_stacked_bar,
+    UsageCompositionConfig,
+)
+from .utils import add_usage_intensity_group
 
 
-def _make_synthetic(n: int = 2500, seed: int = 7) -> pd.DataFrame:
-    rng = np.random.default_rng(seed)
-
-    # device age in months: mixture of new / mid / old
-    age = np.concatenate([
-        rng.integers(0, 12, n // 3),
-        rng.integers(12, 24, n // 3),
-        rng.integers(24, 48, n - 2 * (n // 3)),
-    ])
-
-    # usage dominant state
-    states = np.array(["idle", "social", "video", "gaming", "navigation"])
-    usage = rng.choice(states, size=n, p=[0.20, 0.25, 0.25, 0.15, 0.15])
-
-    # baseline lifetime by usage (hours)
-    mu = {
-        "idle": 8.0,
-        "social": 7.0,
-        "video": 6.2,
-        "gaming": 5.2,
-        "navigation": 6.5,
-    }
-    sigma = {
-        "idle": 0.9,
-        "social": 0.95,
-        "video": 0.85,
-        "gaming": 0.80,
-        "navigation": 0.90,
-    }
-
-    base = np.array([rng.normal(mu[u], sigma[u]) for u in usage])
-
-    # aging effect: older => shorter
-    age_penalty = 0.02 * (age / 12)  # ~2% per year
-    ttl = base * (1 - age_penalty) + rng.normal(0, 0.15, size=n)
-
-    # keep positive
-    ttl = np.clip(ttl, 1.0, None)
-
-    return pd.DataFrame({
-        "ttl_hours": ttl,
-        "device_age_months": age,
-        "usage_dominant_state": usage
-    })
-
+# ------------------------
+# Helpers
+# ------------------------
 
 def _resolve_ttl_col(df: pd.DataFrame) -> str:
-    for col in ("ttl_hours", "TTL_hours"):
+    for col in ("TTL_hours", "ttl_hours"):
         if col in df.columns:
             return col
-    raise ValueError(
-        "No TTL column found. Expected 'ttl_hours' or 'TTL_hours'. "
-        f"Available columns: {list(df.columns)}."
-    )
+    raise ValueError(f"No TTL column found. Columns={list(df.columns)}")
 
 
-def _infer_usage_from_ratios(df: pd.DataFrame) -> pd.DataFrame:
-    ratio_cols = {
-        "ratio_idle": "idle",
-        "ratio_social": "social",
-        "ratio_video": "video",
-        "ratio_game": "gaming",
-    }
-    available = [col for col in ratio_cols if col in df.columns]
-    if len(available) < 2:
-        return df
-
-    ratios = df[available].apply(pd.to_numeric, errors="coerce")
-    has_any = ratios.notna().any(axis=1)
-    dominant = ratios.idxmax(axis=1)
-    usage = dominant.map(ratio_cols).where(has_any)
-
-    df = df.copy()
-    df["usage_dominant_state"] = usage
-    return df
-
-
-def _has_valid_column(df: pd.DataFrame, col: str) -> bool:
-    return col in df.columns and df[col].notna().any()
-
-
-def _compute_quantile_thresholds(lifetime_series: pd.Series, quantile_levels: tuple[float, ...]) -> list[float]:
-    values = pd.to_numeric(lifetime_series, errors="coerce").dropna().to_numpy()
-    if values.size == 0:
+def _compute_quantile_thresholds(
+    lifetime_series: pd.Series,
+    quantile_levels: tuple[float, ...],
+) -> list[float]:
+    x = pd.to_numeric(lifetime_series, errors="coerce").dropna().to_numpy()
+    if x.size == 0:
         return []
-    q = np.asarray(quantile_levels, dtype=float)
-    q = q[(q >= 0.0) & (q <= 1.0)]
-    if q.size == 0:
-        return []
-    thresholds = np.quantile(values, q)
-    return [float(v) for v in thresholds]
+    q = np.asarray(quantile_levels)
+    q = q[(q >= 0) & (q <= 1)]
+    return [float(v) for v in np.quantile(x, q)]
 
 
-def _format_threshold_label(quantile_levels: tuple[float, ...]) -> str:
-    perc = [int(q * 100) for q in quantile_levels]
-    if not perc:
-        return "Key Threshold"
-    if len(perc) == 1:
-        return f"Key Threshold (P{perc[0]})"
-    return "Key Threshold (" + "/".join(f"P{p}" for p in perc) + ")"
+def _format_threshold_label(quantiles: tuple[float, ...]) -> str:
+    p = [int(q * 100) for q in quantiles]
+    return "Key Threshold (" + "/".join(f"P{i}" for i in p) + ")"
+
 
 def _repo_root() -> Path:
-    # demo.py 位于 D:\src\visualization\demo.py
-    # parent: visualization
-    # parent: src
-    # parent: D:\
     return Path(__file__).resolve().parents[2]
 
+def _pick_representative_timeseries(ts_dir: Path) -> Path | None:
+    """
+    Pick a representative JSON (deterministic):
+    - choose lexicographically smallest file name to keep stable across runs
+    """
+    if not ts_dir.exists():
+        return None
+    files = sorted(ts_dir.glob("*.json"))
+    return files[0] if files else None
+
+def _list_timeseries_jsons(ts_dir: Path) -> list[Path]:
+    if not ts_dir.exists():
+        return []
+    return sorted(ts_dir.glob("*.json"))
+
+# ------------------------
+# Main
+# ------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Plot lifetime distribution from summary.csv.")
+    parser = argparse.ArgumentParser("02 - Aging Temperature Interaction Figures")
     parser.add_argument(
         "--summary",
-        default=str(_repo_root() / "output" / "population" / "summary.csv"),
-        help="Path to runner output summary.csv. Default: <repo>/output/population/summary.csv",
+        default=str(_repo_root() / "output/population/summary.csv"),
     )
-    parser.add_argument("--out", default=str(_repo_root() / "output" / "figures_summary"),
-                        help="Output directory for figures.")
+    parser.add_argument(
+        "--out",
+        default=str(_repo_root() / "output/04_single_device_visualization"),
+    )
     parser.add_argument(
         "--quantiles",
         nargs="+",
         type=float,
         default=[0.2, 0.5, 0.8],
-        help="Quantiles used for key threshold lines (0-1).",
     )
-    parser.add_argument("--synthetic", action="store_true",
-                        help="Use synthetic demo data (ONLY if explicitly set).")
+
+    # NEW: timeseries related
+    parser.add_argument(
+        "--timeseries_dir",
+        default=str(_repo_root() / "output/population/timeseries"),
+        help="Directory that contains timeseries/<Device_ID>.json files",
+    )
+    parser.add_argument(
+        "--device_json",
+        default="",
+        help="Optional: specify an exact timeseries json path; if set, it overrides --n_devices.",
+    )
+    parser.add_argument(
+        "--n_devices",
+        type=int,
+        default=10,
+        help="How many devices to render from timeseries_dir (sorted). Default: 10",
+    )
     args = parser.parse_args()
 
-    summary_path = Path(args.summary)
-
-    if args.synthetic:
-        df = _make_synthetic()
-        ttl_col = "ttl_hours"
-    else:
-        if not summary_path.exists():
-            raise FileNotFoundError(
-                f"summary.csv not found at: {summary_path.resolve()}\n"
-                f"Tip: run with --summary <path-to-summary.csv> or place it at "
-                f"{(_repo_root() / 'output' / 'population' / 'summary.csv').resolve()}"
-            )
-        df = pd.read_csv(summary_path)
-        ttl_col = _resolve_ttl_col(df)
-        if "usage_dominant_state" not in df.columns:
-            df = _infer_usage_from_ratios(df)
-
-    device_age_col = "device_age_months"
-    usage_state_col = "usage_dominant_state"
-    has_device_age = _has_valid_column(df, device_age_col)
-    has_usage_state = _has_valid_column(df, usage_state_col)
-
-    quantile_levels = tuple(args.quantiles)
-    thresholds = _compute_quantile_thresholds(df[ttl_col], quantile_levels)
-    threshold_label = _format_threshold_label(quantile_levels)
-
-    cfg = LifetimePlotConfig(
-        ttl_col=ttl_col,
-        device_age_col=device_age_col,
-        usage_state_col=usage_state_col,
-        figsize=(6.6, 4.4),
-        max_levels_usage=8,
-        vlines_hours=thresholds if thresholds else None,
-        vlines_label=threshold_label,
-    )
+    # ------------------------
+    # Load data
+    # ------------------------
+    df = pd.read_csv(args.summary)
+    ttl_col = _resolve_ttl_col(df)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    r = df[["ratio_idle","ratio_social","ratio_video","ratio_game"]].apply(pd.to_numeric, errors="coerce")
-    print(r.describe(percentiles=[.5,.8,.9,.95]))
-    print((r.idxmax(axis=1)).value_counts())
+    # ------------------------
+    # Common reference lines
+    # ------------------------
+    quantiles = tuple(args.quantiles)
+    thresholds = _compute_quantile_thresholds(df[ttl_col], quantiles)
+    threshold_label = _format_threshold_label(quantiles)
 
-    plot_population_lifetime_distribution(
-        df,
-        kind="kde",
-        stratify="none",
-        cfg=cfg,
-        save_path=str(out / "lifetime_kde_overall.pdf"),
-        show=False,
+    # # ============================================================
+    # # 0. Overall population
+    # # ============================================================
+    # cfg_overall = LifetimePlotConfig(
+    #     ttl_col=ttl_col,
+    #     vlines_hours=thresholds,
+    #     vlines_label=threshold_label,
+    #     title_prefix="Population Lifetime Distribution",
+    # )
+
+    # plot_population_lifetime_distribution(
+    #     df, kind="kde", stratify="none",
+    #     cfg=cfg_overall,
+    #     save_path=str(out / "overall_kde.pdf"),
+    #     show=False,
+    # )
+    # plot_population_lifetime_distribution(
+    #     df, kind="ecdf", stratify="none",
+    #     cfg=cfg_overall,
+    #     save_path=str(out / "overall_ecdf.pdf"),
+    #     show=False,
+    # )
+
+    # # ============================================================
+    # # 1. By Active Usage Intensity (MAIN RESULT)
+    # # ============================================================
+    # df = add_usage_intensity_group(df)
+
+    # cfg_intensity = LifetimePlotConfig(
+    #     ttl_col=ttl_col,
+    #     usage_state_col="usage_intensity_group",
+    #     legend_title_usage="Active Usage Intensity",
+    #     vlines_hours=thresholds,
+    #     vlines_label=threshold_label,
+    #     title_prefix="Lifetime by Active Usage Intensity",
+    # )
+
+    # plot_population_lifetime_distribution(
+    #     df, kind="kde", stratify="usage_dominant_state",
+    #     cfg=cfg_intensity,
+    #     save_path=str(out / "by_intensity_kde.pdf"),
+    #     show=False,
+    # )
+    # plot_population_lifetime_distribution(
+    #     df, kind="ecdf", stratify="usage_dominant_state",
+    #     cfg=cfg_intensity,
+    #     save_path=str(out / "by_intensity_ecdf.pdf"),
+    #     show=False,
+    # )
+
+    # # ============================================================
+    # # 2. By Device Aging (CONTROL / CONTEXT)
+    # # ============================================================
+    # cfg_age = LifetimePlotConfig(
+    #     ttl_col=ttl_col,
+    #     device_age_col="device_age_months",
+    #     legend_title_age="Device Age",
+    #     vlines_hours=thresholds,
+    #     vlines_label=threshold_label,
+    #     title_prefix="Lifetime by Device Age",
+    # )
+
+    # plot_population_lifetime_distribution(
+    #     df, kind="kde", stratify="device_age_months",
+    #     cfg=cfg_age,
+    #     save_path=str(out / "by_age_kde.pdf"),
+    #     show=False,
+    # )
+    # plot_population_lifetime_distribution(
+    #     df, kind="ecdf", stratify="device_age_months",
+    #     cfg=cfg_age,
+    #     save_path=str(out / "by_age_ecdf.pdf"),
+    #     show=False,
+    # )
+
+    # # ============================================================
+    # # 3. Supporting: Usage composition
+    # # ============================================================
+    # comp_cfg = UsageCompositionConfig(
+    #     group_col="usage_intensity_group",
+    #     title="Usage Composition within Intensity Groups",
+    # )
+    # plot_active_composition_stacked_bar(
+    #     df,
+    #     cfg=comp_cfg,
+    #     save_path=str(out / "usage_composition_by_intensity.pdf"),
+    #     show=False,
+    # )
+
+    # # ============================================================
+    # # 4. Aging × Temperature interaction (INSIGHT FIGURE)
+    # # ============================================================
+
+    # from .aging_temperature import (
+    #     plot_aging_temperature_interaction_single,
+    #     AgingTemperatureSingleConfig,
+    # )
+
+    # at_cfg = AgingTemperatureSingleConfig(
+    #     age_col="device_age_months",
+    #     ttl_col=ttl_col,
+    #     temp_col="avg_battery_temp_celsius",
+    #     max_points=500,
+    #     figsize=(6.8, 4.8),
+    # )
+
+    # plot_aging_temperature_interaction_single(
+    #     df,
+    #     cfg=at_cfg,
+    #     save_path=str(out / "aging_temperature_interaction_single.pdf"),
+    #     show=False,
+    # )
+
+    # # ============================================================
+    # # 5. Who consumes energy? (Power structure boxplot)
+    # # ============================================================
+
+    # from .power_structure_boxplot import (
+    #     plot_power_structure_boxplot,
+    #     PowerStructureBoxplotConfig,
+    # )
+
+    # ps_cfg = PowerStructureBoxplotConfig(
+    #     figsize=(6.6, 4.2),
+    # )
+
+    # plot_power_structure_boxplot(
+    #     df,
+    #     cfg=ps_cfg,
+    #     save_path=str(out / "who_consumes_energy_boxplot.pdf"),
+    #     show=False,
+    # )
+
+    # ============================================================
+    # Single-device compact dynamics figures (batch)
+    # ============================================================
+    from .device_timeseries_compact import (
+        plot_device_timeseries_compact,
+        DeviceTimeseriesCompactConfig,
     )
-    plot_population_lifetime_distribution(
-        df,
-        kind="ecdf",
-        stratify="none",
-        cfg=cfg,
-        save_path=str(out / "lifetime_ecdf_overall.pdf"),
-        show=False,
+
+    ts_dir = Path(args.timeseries_dir)
+
+    if args.device_json.strip():
+        ts_paths = [Path(args.device_json.strip())]
+    else:
+        all_ts = _list_timeseries_jsons(ts_dir)
+        if not all_ts:
+            print("[WARN] No timeseries json found; skip single-device dynamics figures.")
+            print(f"       timeseries_dir={ts_dir}")
+            return
+        n = int(args.n_devices)
+        if n <= 0:
+            print("[WARN] --n_devices <= 0, nothing to render.")
+            return
+        ts_paths = all_ts[:n]
+
+    # Output folder for batch
+    out_ts = out / "single_device_dynamics"
+    out_ts.mkdir(parents=True, exist_ok=True)
+
+    cfg = DeviceTimeseriesCompactConfig(
+        figsize=(7.2, 4.8),
+        height_ratios=(2.2, 0.38, 1.05, 0.22),
+        hspace=0.08,
+        show_low_soc_band=True,
+        low_soc_threshold=0.20,
+        state_band_use_rle=True,
+        total_power_ylabel=None,  # keep middle panel clean; set to "Total Power (W)" if you want
     )
 
-    if has_device_age:
-        plot_population_lifetime_distribution(
-            df,
-            kind="kde",
-            stratify=cfg.device_age_col,
+    # Optional: write an index file so you can quickly browse
+    index_lines = []
+    for i, ts_path in enumerate(ts_paths, start=1):
+        if not ts_path.exists():
+            print(f"[WARN] Missing: {ts_path}")
+            continue
+
+        # Use filename stem as device id (your JSON is <Device_ID>.json)
+        device_id = ts_path.stem
+        save_pdf = out_ts / f"{i:02d}_{device_id}.pdf"
+
+        plot_device_timeseries_compact(
+            str(ts_path),
             cfg=cfg,
-            save_path=str(out / "lifetime_kde_by_age.pdf"),
-            show=False,
-        )
-        plot_population_lifetime_distribution(
-            df,
-            kind="ecdf",
-            stratify=cfg.device_age_col,
-            cfg=cfg,
-            save_path=str(out / "lifetime_ecdf_by_age.pdf"),
+            save_path=str(save_pdf),
             show=False,
         )
 
-    if has_usage_state:
-        plot_population_lifetime_distribution(
-            df,
-            kind="kde",
-            stratify=cfg.usage_state_col,
-            cfg=cfg,
-            save_path=str(out / "lifetime_kde_by_usage.pdf"),
-            show=False,
-        )
-        plot_population_lifetime_distribution(
-            df,
-            kind="ecdf",
-            stratify=cfg.usage_state_col,
-            cfg=cfg,
-            save_path=str(out / "lifetime_ecdf_by_usage.pdf"),
-            show=False,
+        index_lines.append(f"{i:02d}\t{device_id}\t{save_pdf.name}")
+        print(f"[OK] ({i}/{len(ts_paths)}) Saved: {save_pdf}")
+
+    if index_lines:
+        (out_ts / "index.tsv").write_text(
+            "idx\tDevice_ID\tfile\n" + "\n".join(index_lines) + "\n",
+            encoding="utf-8",
         )
 
-    print(f"Saved figures to: {out.resolve()}")
+
+    print(f"[OK] Saved lifetime figures to: {out.resolve()}")
 
 
 if __name__ == "__main__":
-    
     main()

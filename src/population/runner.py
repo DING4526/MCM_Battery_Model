@@ -142,6 +142,16 @@ def run_population(
         "aging_loss_est",
         "n_cycles_est",
         "lambda_eff_est",
+        # ---- power breakdown (avg power) ----
+        "avg_power_screen_W",
+        "avg_power_cpu_W",
+        "avg_power_radio_W",
+        "avg_power_background_W",
+        # ---- energy breakdown (ratio of total energy) ----
+        "energy_ratio_screen",
+        "energy_ratio_cpu",
+        "energy_ratio_radio",
+        "energy_ratio_background",
     ]
 
     # 写表头：仅当非追加模式
@@ -194,6 +204,33 @@ def run_population(
                 fixed_dwell_sec=fixed_dwell_sec,
             )
 
+            dt_sec = float(dt)
+
+            def _safe_mean(x):
+                return (sum(x) / len(x)) if x else 0.0
+
+            def _safe_energy(x):
+                return (sum(x) * dt_sec) if x else 0.0
+
+            E_screen = _safe_energy(result.get("Power_screen"))
+            E_cpu = _safe_energy(result.get("Power_cpu"))
+            E_radio = _safe_energy(result.get("Power_radio"))
+            E_bg = _safe_energy(result.get("Power_background"))
+            E_total = _safe_energy(result.get("Power"))
+
+            # 避免除 0
+            den = E_total if E_total > 1e-12 else 1.0
+
+            energy_ratio_screen = E_screen / den
+            energy_ratio_cpu = E_cpu / den
+            energy_ratio_radio = E_radio / den
+            energy_ratio_background = E_bg / den
+
+            avg_power_screen = _safe_mean(result.get("Power_screen"))
+            avg_power_cpu = _safe_mean(result.get("Power_cpu"))
+            avg_power_radio = _safe_mean(result.get("Power_radio"))
+            avg_power_bg = _safe_mean(result.get("Power_background"))
+
             ran_count += 1
 
             ttl_h = result["TTL"] / 3600.0
@@ -222,6 +259,16 @@ def run_population(
                 "ratio_social": round(float(sr.get("SOCIAL", 0.0)), 8),
                 "ratio_video": round(float(sr.get("VIDEO", 0.0)), 8),
                 "ratio_game": round(float(sr.get("GAME", 0.0)), 8),
+
+                "avg_power_screen_W": round(avg_power_screen, 6),
+                "avg_power_cpu_W": round(avg_power_cpu, 6),
+                "avg_power_radio_W": round(avg_power_radio, 6),
+                "avg_power_background_W": round(avg_power_bg, 6),
+
+                "energy_ratio_screen": round(energy_ratio_screen, 8),
+                "energy_ratio_cpu": round(energy_ratio_cpu, 8),
+                "energy_ratio_radio": round(energy_ratio_radio, 8),
+                "energy_ratio_background": round(energy_ratio_background, 8),
 
                 "signal_strength_avg": (row.get("signal_strength_avg") or ""),
                 "background_app_usage_level": (row.get("background_app_usage_level") or ""),

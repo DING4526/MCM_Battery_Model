@@ -123,3 +123,58 @@ def order_categories(
     if max_levels is not None:
         out = out[:max_levels]
     return out
+
+
+def add_usage_intensity_group(
+    df: pd.DataFrame,
+    *,
+    social_col: str = "ratio_social",
+    video_col: str = "ratio_video",
+    game_col: str = "ratio_game",
+    out_col: str = "usage_intensity_group",
+    active_ratio_col: str = "active_usage_ratio",
+    bins: Sequence[float] = (0.0, 0.20, 0.35, 1.0),
+    labels: Sequence[str] = ("low-active", "mid-active", "high-active"),
+    right: bool = False,
+) -> pd.DataFrame:
+    """
+    Add usage intensity group based on active usage ratio:
+        active = ratio_social + ratio_video + ratio_game
+
+    Creates:
+      - active_usage_ratio (continuous)
+      - usage_intensity_group (categorical)
+
+    Raises:
+      - ValueError if ratio columns missing or grouping collapses to <= 1 level.
+    """
+    for c in (social_col, video_col, game_col):
+        if c not in df.columns:
+            raise ValueError(f"Column '{c}' not found; required for intensity grouping.")
+
+    df = df.copy()
+
+    active = (
+        0.8 * to_numeric_series(df[social_col])
+        + 1.7 * to_numeric_series(df[video_col])
+        + 2.5 * to_numeric_series(df[game_col])
+    )
+
+    df[active_ratio_col] = active
+
+    df[out_col] = pd.cut(
+        active,
+        bins=list(bins),
+        labels=list(labels),
+        include_lowest=True,
+        right=right,
+    )
+
+    vc = df[out_col].value_counts(dropna=True)
+    if vc.size < 2:
+        raise ValueError(
+            f"{out_col} collapsed (<=1 group). Check ratio columns / bins.\n"
+            f"value_counts:\n{vc}"
+        )
+
+    return df

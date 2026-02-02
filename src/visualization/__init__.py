@@ -22,6 +22,8 @@ from .lifetime_distribution import (
     plot_ecdf_stratified,
     add_age_group_column,
 )
+from .utils import add_age_group_column, add_usage_intensity_group
+from .usage_composition import plot_active_composition_stacked_bar
 
 __all__ = [
     "LifetimePlotConfig",
@@ -31,4 +33,26 @@ __all__ = [
     "plot_kde_stratified",
     "plot_ecdf_stratified",
     "add_age_group_column",
+    "add_usage_intensity_group",
+    "plot_active_composition_stacked_bar",
+]
+
+from .power_structure_boxplot import (
+    PowerStructureBoxplotConfig,
+    plot_power_structure_boxplot,
+)
+
+__all__ += [
+    "PowerStructureBoxplotConfig",
+    "plot_power_structure_boxplot",
+]
+
+from .device_timeseries_compact import (
+    DeviceTimeseriesCompactConfig,
+    plot_device_timeseries_compact,
+)
+
+__all__ += [
+    "DeviceTimeseriesCompactConfig",
+    "plot_device_timeseries_compact",
 ]
