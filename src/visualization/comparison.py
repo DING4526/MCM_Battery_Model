@@ -15,6 +15,7 @@ from .config import (
     COLORS, SCENARIO_COLORS, DEFAULT_COLORS,
     FONT_SIZES, LINE_WIDTHS, FIGURE_SIZES,
     to_hours, get_show_plots, save_plotly_figure,
+    hex_to_rgba,
     setup_style,
 )
 
@@ -99,7 +100,7 @@ def plot_scenario_boxplot(comparison_results, ax=None, show=True, save_path=None
             name=s,
             marker=dict(color=color),
             boxmean='sd',
-            fillcolor=f'rgba({int(color[1:3], 16)}, {int(color[3:5], 16)}, {int(color[5:7], 16)}, 0.4)',
+            fillcolor=hex_to_rgba(color, 0.4),
             line=dict(color=color, width=LINE_WIDTHS["main"]),
         ))
     
@@ -188,7 +189,7 @@ def plot_scenario_radar(comparison_results, metrics=None, ax=None, show=True, sa
             r=values,
             theta=labels_closed,
             fill='toself',
-            fillcolor=f'rgba({int(color[1:3], 16)}, {int(color[3:5], 16)}, {int(color[5:7], 16)}, 0.15)',
+            fillcolor=hex_to_rgba(color, 0.15),
             line=dict(color=color, width=LINE_WIDTHS["main"]),
             marker=dict(size=5, color=color),
             name=s,

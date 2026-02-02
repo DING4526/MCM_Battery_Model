@@ -321,15 +321,23 @@ def save_plotly_figure(fig, filename, subdir="", size_type="default"):
     
     # PNG（高清）
     png_path = get_save_path(f"{base_name}.png", subdir)
-    fig.write_image(png_path, width=width, height=height, scale=2)
-    saved_paths["png"] = png_path
-    print(f"[Save] PNG: {png_path}")
+    try:
+        fig.write_image(png_path, width=width, height=height, scale=2)
+        saved_paths["png"] = png_path
+        print(f"[Save] PNG: {png_path}")
+    except Exception as e:
+        print(f"[Warning] PNG 导出失败: {e}")
+        print("  提示: 请确保已安装 kaleido: pip install kaleido")
     
     # PDF（矢量）
     pdf_path = get_save_path(f"{base_name}.pdf", subdir)
-    fig.write_image(pdf_path, width=width, height=height, scale=2)
-    saved_paths["pdf"] = pdf_path
-    print(f"[Save] PDF: {pdf_path}")
+    try:
+        fig.write_image(pdf_path, width=width, height=height, scale=2)
+        saved_paths["pdf"] = pdf_path
+        print(f"[Save] PDF: {pdf_path}")
+    except Exception as e:
+        print(f"[Warning] PDF 导出失败: {e}")
+        print("  提示: 请确保已安装 kaleido: pip install kaleido")
     
     return saved_paths
 
@@ -348,6 +356,40 @@ def to_hours(time_list):
 def get_figure_size(size_type="default"):
     """获取图表尺寸"""
     return FIGURE_SIZES.get(size_type, FIGURE_SIZES["default"])
+
+
+def hex_to_rgba(hex_color, alpha=1.0):
+    """
+    将十六进制颜色转换为 RGBA 字符串
+    
+    参数：
+        hex_color : str - 十六进制颜色，如 "#2980B9"
+        alpha : float - 透明度 (0.0-1.0)
+    
+    返回：
+        str - RGBA 字符串，如 "rgba(41, 128, 185, 0.5)"
+    """
+    hex_color = hex_color.lstrip('#')
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return f"rgba({r}, {g}, {b}, {alpha})"
+
+
+def get_color_with_alpha(color_name, alpha=1.0):
+    """
+    获取带透明度的颜色
+    
+    参数：
+        color_name : str - 颜色名称（COLORS 字典的键）
+        alpha : float - 透明度 (0.0-1.0)
+    
+    返回：
+        str - RGBA 字符串
+    """
+    if color_name in COLORS:
+        return hex_to_rgba(COLORS[color_name], alpha)
+    return hex_to_rgba(color_name, alpha)
 
 
 # 初始化样式
