@@ -27,20 +27,37 @@ from typing import Optional, Tuple, Dict, List, Any
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+from matplotlib.colors import LinearSegmentedColormap
 
 from .style import set_paper_style, finish_axes, save_figure, PaperStyle
+
+
+def _create_red_gradient_cmap() -> LinearSegmentedColormap:
+    """
+    Create a custom red gradient colormap:
+    low values = light pink/white, high values = deep red.
+    """
+    colors = [
+        (1.0, 0.95, 0.93),   # very light pink/white (low)
+        (0.99, 0.85, 0.80),  # light pink
+        (0.98, 0.65, 0.55),  # light red/salmon
+        (0.90, 0.40, 0.30),  # medium red
+        (0.75, 0.20, 0.15),  # darker red
+        (0.55, 0.08, 0.05),  # deep red (high)
+    ]
+    return LinearSegmentedColormap.from_list("red_gradient", colors, N=256)
 
 
 @dataclass
 class DeviceTimeseriesCompactConfig:
     # ---- figure layout ----
-    figsize: Tuple[float, float] = (7.2, 4.8)
+    figsize: Tuple[float, float] = (8.5, 4.8)  # wider to accommodate right legend
     # A (SOC+Tb), P (total power thin), H (heatmap), C (state band)
     height_ratios: Tuple[float, float, float, float] = (2.2, 0.38, 1.05, 0.22)
     hspace: float = 0.08
 
     # ---- labels ----
-    title: str = "Single-device Dynamics (SOC, Temperature, and Power)"
+    title: str = ""  # no title, keep clean
     xlabel: str = "Time (hours)"
 
     # ---- Panel A: SOC + Tb ----
@@ -50,13 +67,12 @@ class DeviceTimeseriesCompactConfig:
     soc_fill_alpha: float = 0.12
 
     # Temperature axis
-    tb_pad_C: float = 1.0
-    tb_max_cap_C: float = 55.0
-    tb_force_zero: bool = True  # force right axis to include 0°C
-    tb_color: str = "#C0392B"   # red-ish
+    tb_ylim: Tuple[float, float] = (10.0, 45.0)  # fixed range 10-45°C
+    tb_line_color: str = "#C0392B"   # red-ish for the line
+    tb_axis_color: str = "black"     # black for axis ticks and labels
 
-    # Low SOC band
-    show_low_soc_band: bool = True
+    # Low SOC band - disabled by default to avoid background fill issue
+    show_low_soc_band: bool = False
     low_soc_threshold: float = 0.20
 
     # ---- Panel P: total power ----
@@ -68,10 +84,10 @@ class DeviceTimeseriesCompactConfig:
     power_norm_percentile: float = 99.0
     heatmap_interpolation: str = "nearest"
     heatmap_aspect: str = "auto"
-    heatmap_cmap: str = "magma"  # unified sequential colormap
+    heatmap_cmap: str = "red_gradient"  # custom red gradient colormap
     heatmap_vmin: float = 0.0
     heatmap_vmax: float = 1.0
-    heatmap_cbar_label: str = "Normalized Module Power (per-device, 0–1)"
+    heatmap_cbar_label: str = "Power (0–1)"  # shortened label
     show_power_yticks: bool = True
 
     # ---- Panel C: state band ----
@@ -79,6 +95,7 @@ class DeviceTimeseriesCompactConfig:
 
     # ---- legend placement ----
     panelA_legend_outside: bool = True
+    legend_on_right: bool = True  # place legends on the right side
 
     # ---- style ----
     style: Optional[PaperStyle] = None
@@ -202,6 +219,10 @@ def plot_device_timeseries_compact(
     t_hr = t_sec / 3600.0
     tb_c = tb_k - 273.15
     t_edges = _time_edges(t_hr)
+    
+    # Define actual data range for consistent x-axis limits
+    x_min = float(t_hr[0]) if len(t_hr) > 0 else 0.0
+    x_max = float(t_hr[-1]) if len(t_hr) > 0 else 1.0
 
     # ---- module power (heatmap) ----
     p_screen = _to_np(payload.get("Power_screen", np.full(T, np.nan)))[:T]
@@ -216,87 +237,91 @@ def plot_device_timeseries_compact(
         and np.isfinite(p_bg).any()
     )
 
-    # ---- figure layout ----
+    # ---- figure layout with space for right legend ----
     fig = plt.figure(figsize=cfg.figsize)
-    gs = fig.add_gridspec(
-        nrows=4,
-        ncols=1,
-        height_ratios=list(cfg.height_ratios),
-        hspace=cfg.hspace,
-    )
+    
+    # Reserve right margin for legends and colorbar
+    if cfg.legend_on_right:
+        # Main plot area: left=0.08 to right=0.78
+        # Legend area: ~0.80 to ~0.90
+        # Colorbar area: 0.92 to 0.935
+        gs = fig.add_gridspec(
+            nrows=4,
+            ncols=1,
+            height_ratios=list(cfg.height_ratios),
+            hspace=cfg.hspace,
+            left=0.08,
+            right=0.78,  # leave more space on right for legends + colorbar
+            top=0.95,
+            bottom=0.10,
+        )
+    else:
+        gs = fig.add_gridspec(
+            nrows=4,
+            ncols=1,
+            height_ratios=list(cfg.height_ratios),
+            hspace=cfg.hspace,
+        )
 
     axA = fig.add_subplot(gs[0, 0])
     axP = fig.add_subplot(gs[1, 0], sharex=axA)  # total power (thin)
     axH = fig.add_subplot(gs[2, 0], sharex=axA)  # heatmap
     axC = fig.add_subplot(gs[3, 0], sharex=axA)  # state band
 
-    # Title (top): keep title short; put device_id as small annotation
-    meta = payload.get("meta", {})
-    did = (meta.get("Device_ID") or "").strip()
-    axA.set_title(cfg.title, pad=6)
-    if did:
-        axA.text(
-            1.0,
-            1.02,
-            did,
-            transform=axA.transAxes,
-            ha="right",
-            va="bottom",
-            fontsize=9,
-            alpha=0.9,
-        )
+    # Title - only show if not empty (device ID removed to avoid overlap)
+    if cfg.title:
+        axA.set_title(cfg.title, pad=6)
 
     # =========================
     # Panel A: SOC + Tb
     # =========================
-    axA.plot(t_hr, soc, linewidth=2.2, label="SOC (left axis)")
+    axA.plot(t_hr, soc, linewidth=2.2, label="SOC")
     if cfg.soc_fill_alpha and cfg.soc_fill_alpha > 0:
         axA.fill_between(t_hr, 0.0, soc, alpha=cfg.soc_fill_alpha, linewidth=0)
 
     axA.set_ylim(*cfg.soc_ylim)
     axA.set_ylabel("SOC")
 
-    # Low SOC band
+    # Low SOC band - only apply to data range, not beyond
     if cfg.show_low_soc_band:
         mask = soc <= cfg.low_soc_threshold
         if mask.any():
             idx0 = int(np.argmax(mask))
-            axA.axvspan(t_edges[idx0], t_edges[-1], alpha=0.10, linewidth=0)
-            axA.text(
-                t_edges[idx0],
-                cfg.soc_ylim[0] + 0.08 * (cfg.soc_ylim[1] - cfg.soc_ylim[0]),
-                "OCV drop dominates (low SOC)",
-                fontsize=10,
-                va="bottom",
-                ha="left",
-                alpha=0.9,
-            )
+            # Use the actual data range, not t_edges[-1] which extends beyond data
+            x_end = t_hr[-1] if len(t_hr) > 0 else t_edges[-1]
+            axA.axvspan(t_edges[idx0], x_end, alpha=0.10, linewidth=0)
 
-    # Temperature on twin axis (red-ish, include 0°C)
+    # Temperature on twin axis
     axA2 = axA.twinx()
     axA2.plot(
         t_hr,
         tb_c,
         linewidth=2.0,
         linestyle="--",
-        color=cfg.tb_color,
-        label="T_b (°C, right axis)",
+        color=cfg.tb_line_color,
+        label="Tb (°C)",
     )
 
-    tb_lo, tb_hi = _nice_limits(tb_c, pad=0.08)
-    tb_hi = min(tb_hi + cfg.tb_pad_C, cfg.tb_max_cap_C)
-    tb_lo = tb_lo - cfg.tb_pad_C
-    if cfg.tb_force_zero:
-        tb_lo = min(tb_lo, 0.0)
-    axA2.set_ylim(tb_lo, tb_hi)
-    axA2.set_ylabel("T_b (°C)")
-    axA2.tick_params(axis="y", colors=cfg.tb_color)
-    axA2.yaxis.label.set_color(cfg.tb_color)
+    # Fixed temperature range 10-45°C
+    axA2.set_ylim(*cfg.tb_ylim)
+    axA2.set_ylabel("Tb (°C)", color=cfg.tb_axis_color)
+    axA2.tick_params(axis="y", colors=cfg.tb_axis_color)
 
-    # Legend for Panel A (combine handles) - move outside to avoid occlusion
+    # Legend for Panel A - place on right side outside plot
     h1, l1 = axA.get_legend_handles_labels()
     h2, l2 = axA2.get_legend_handles_labels()
-    if cfg.panelA_legend_outside:
+    if cfg.legend_on_right:
+        axA.legend(
+            h1 + h2,
+            l1 + l2,
+            loc="upper left",
+            bbox_to_anchor=(1.02, 1.0),
+            frameon=True,
+            fancybox=False,
+            edgecolor="#888888",
+            fontsize=9,
+        )
+    elif cfg.panelA_legend_outside:
         axA.legend(
             h1 + h2,
             l1 + l2,
@@ -318,6 +343,9 @@ def plot_device_timeseries_compact(
 
     finish_axes(axA, cfg.style)
     axA2.spines["top"].set_visible(False)
+    
+    # Set consistent x-axis limits for Panel A
+    axA.set_xlim(x_min, x_max)
 
     # Hide x tick labels for top panels
     plt.setp(axA.get_xticklabels(), visible=False)
@@ -325,26 +353,43 @@ def plot_device_timeseries_compact(
     # =========================
     # Panel P: Total power (separate thin row)
     # =========================
-    axP.plot(t_hr, p_total, linewidth=cfg.total_power_linewidth, label="Total Power")
+    axP.plot(t_hr, p_total, linewidth=cfg.total_power_linewidth, color="#2E86AB", label="Power")
     if cfg.total_power_ylabel:
         axP.set_ylabel(cfg.total_power_ylabel)
     else:
         axP.set_ylabel("")
         axP.set_yticks([])
 
-    axP.legend(
-        loc="upper right",
-        frameon=True,
-        fancybox=False,
-        edgecolor="#444444",
-    )
+    if cfg.legend_on_right:
+        axP.legend(
+            loc="upper left",
+            bbox_to_anchor=(1.02, 1.0),
+            frameon=True,
+            fancybox=False,
+            edgecolor="#888888",
+            fontsize=9,
+        )
+    else:
+        axP.legend(
+            loc="upper right",
+            frameon=True,
+            fancybox=False,
+            edgecolor="#444444",
+        )
     finish_axes(axP, cfg.style)
+    axP.set_xlim(x_min, x_max)
     plt.setp(axP.get_xticklabels(), visible=False)
 
     # =========================
     # Panel H: Module heatmap
     # =========================
     axH.set_ylabel("")
+
+    # Determine colormap
+    if cfg.heatmap_cmap == "red_gradient":
+        cmap = _create_red_gradient_cmap()
+    else:
+        cmap = cfg.heatmap_cmap
 
     if have_modules:
         M = np.vstack([p_screen, p_cpu, p_radio, p_bg])  # (4, T)
@@ -362,9 +407,9 @@ def plot_device_timeseries_compact(
             M_norm,
             aspect=cfg.heatmap_aspect,
             interpolation=cfg.heatmap_interpolation,
-            extent=[t_edges[0], t_edges[-1], 0, 4],  # aligned with edges
+            extent=[x_min, x_max, 0, 4],  # use actual data range
             origin="lower",
-            cmap=cfg.heatmap_cmap,
+            cmap=cmap,
             vmin=cfg.heatmap_vmin,
             vmax=cfg.heatmap_vmax,
         )
@@ -378,8 +423,21 @@ def plot_device_timeseries_compact(
         for y in [1, 2, 3]:
             axH.axhline(y, linewidth=1.0, alpha=0.18)
 
-        cbar = fig.colorbar(im, ax=axH, pad=0.012, fraction=0.045)
-        cbar.set_label(cfg.heatmap_cbar_label)
+        # Colorbar - place in a dedicated axes on the far right
+        # This prevents the colorbar from taking space from the heatmap
+        if cfg.legend_on_right:
+            pos = axH.get_position()
+
+            cbar_w = 0.015   # colorbar 宽度
+            gap = 0.010      # 和热力图之间的间距（关键调这个）
+            cax_left = pos.x1 + gap
+
+            cax = fig.add_axes([cax_left, pos.y0, cbar_w, pos.height])
+            cbar = fig.colorbar(im, cax=cax)
+            cbar.set_label(cfg.heatmap_cbar_label, fontsize=9)
+        else:
+            cbar = fig.colorbar(im, ax=axH, pad=0.012, fraction=0.045)
+            cbar.set_label(cfg.heatmap_cbar_label, fontsize=9)
     else:
         axH.text(
             0.5,
@@ -395,6 +453,7 @@ def plot_device_timeseries_compact(
         axH.set_xlim(t_edges[0], t_edges[-1])
 
     finish_axes(axH, cfg.style)
+    axH.set_xlim(x_min, x_max)
     plt.setp(axH.get_xticklabels(), visible=False)
 
     # =========================
@@ -410,8 +469,9 @@ def plot_device_timeseries_compact(
     if cfg.state_band_use_rle:
         segs = _rle_segments([str(s) for s in states])
         for a, b, st in segs:
-            x0 = t_edges[a]
-            x1 = t_edges[b]
+            # Clamp segment bounds to actual data range to avoid overflow
+            x0 = max(t_edges[a] if a < len(t_edges) else x_min, x_min)
+            x1 = min(t_edges[b] if b < len(t_edges) else x_max, x_max)
             color = palette.get(st, "#BBBBBB")
             axC.axvspan(x0, x1, ymin=0.0, ymax=1.0, color=color, linewidth=0)
     else:
@@ -420,17 +480,17 @@ def plot_device_timeseries_compact(
         arr = np.array([mapping[str(s)] for s in states], dtype=int)[None, :]
         from matplotlib.colors import ListedColormap
 
-        cmap = ListedColormap([palette.get(u, "#BBBBBB") for u in uniq])
+        cmap_state = ListedColormap([palette.get(u, "#BBBBBB") for u in uniq])
         axC.imshow(
             arr,
             aspect="auto",
             interpolation="nearest",
-            extent=[t_edges[0], t_edges[-1], 0, 1],
+            extent=[x_min, x_max, 0, 1],  # use actual data range
             origin="lower",
-            cmap=cmap,
+            cmap=cmap_state,
         )
 
-    # state legend (small color patches)
+    # state legend (small color patches) - place on right side
     legend_order = ["IDLE", "SOCIAL", "VIDEO", "GAME", "DeepIdle", "Social", "Video", "Gaming", "Navigation"]
     present = [s for s in legend_order if s in set(str(x) for x in states)]
     extras = [s for s in sorted(set(str(x) for x in states)) if s not in present]
@@ -438,18 +498,32 @@ def plot_device_timeseries_compact(
 
     handles = [Patch(facecolor=palette.get(s, "#BBBBBB"), edgecolor="none", label=s) for s in legend_states]
     if handles:
-        axC.legend(
-            handles=handles,
-            loc="upper center",
-            bbox_to_anchor=(0.5, 1.85),
-            ncol=min(5, len(handles)),
-            frameon=True,
-            fancybox=False,
-            edgecolor="#444444",
-            columnspacing=0.8,
-            handlelength=1.0,
-            handletextpad=0.4,
-        )
+        if cfg.legend_on_right:
+            axC.legend(
+                handles=handles,
+                loc="upper left",
+                bbox_to_anchor=(1.02, 1.0),
+                ncol=1,
+                frameon=True,
+                fancybox=False,
+                edgecolor="#888888",
+                fontsize=9,
+                handlelength=1.0,
+                handletextpad=0.4,
+            )
+        else:
+            axC.legend(
+                handles=handles,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 1.85),
+                ncol=min(5, len(handles)),
+                frameon=True,
+                fancybox=False,
+                edgecolor="#444444",
+                columnspacing=0.8,
+                handlelength=1.0,
+                handletextpad=0.4,
+            )
 
     # clean look: no spines
     axC.spines["left"].set_visible(False)
@@ -457,7 +531,11 @@ def plot_device_timeseries_compact(
     axC.spines["top"].set_visible(False)
     axC.tick_params(direction="out", length=3, width=0.8)
 
-    plt.tight_layout()
+    # Set consistent x-axis limits for Panel C
+    axC.set_xlim(x_min, x_max)
+
+    if not cfg.legend_on_right:
+        plt.tight_layout()
 
     if save_path:
         save_figure(fig, save_path)

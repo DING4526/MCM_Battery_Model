@@ -196,7 +196,7 @@ def run_population(
                 seed=seed,
                 record=True,
                 record_breakdown=True,
-                record_uncorrected=False,
+                record_uncorrected=True,
                 usage_states_override=usage_states,
                 device_params_override=None,
                 battery_capacity_mah=cap_mah,
@@ -334,6 +334,10 @@ def run_population(
                     "Power_cpu": result.get("Power_cpu", []),
                     "Power_radio": result.get("Power_radio", []),
                     "Power_background": result.get("Power_background", []),
+                    "SOC_uncorrected": result.get("SOC_uncorrected", []),
+                    "SOC_voltage_only": result.get("SOC_voltage_only", []),
+                    "SOC_temperature_only": result.get("SOC_temperature_only", []),
+                    "SOC_aging_only": result.get("SOC_aging_only", []),
                 }
 
                 with open(out_path, "w", encoding="utf-8") as jf:

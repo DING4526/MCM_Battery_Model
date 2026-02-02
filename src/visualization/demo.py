@@ -295,7 +295,7 @@ def main():
         figsize=(7.2, 4.8),
         height_ratios=(2.2, 0.38, 1.05, 0.22),
         hspace=0.08,
-        show_low_soc_band=True,
+        show_low_soc_band=False,
         low_soc_threshold=0.20,
         state_band_use_rle=True,
         total_power_ylabel=None,  # keep middle panel clean; set to "Total Power (W)" if you want
