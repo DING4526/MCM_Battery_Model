@@ -133,7 +133,7 @@ def add_usage_intensity_group(
     game_col: str = "ratio_game",
     out_col: str = "usage_intensity_group",
     active_ratio_col: str = "active_usage_ratio",
-    bins: Sequence[float] = (0.0, 0.20, 0.35, 1.0),
+    bins: Sequence[float] = (0.0, 0.35, 0.65, 1.0),
     labels: Sequence[str] = ("low-active", "mid-active", "high-active"),
     right: bool = False,
 ) -> pd.DataFrame:

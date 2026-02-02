@@ -41,7 +41,7 @@ class AgingTemperatureSingleConfig:
     temp_col: str = "avg_battery_temp_celsius"
 
     # Temperature bands (°C): split at 37°C
-    temp_bins: Sequence[float] = (-np.inf, 35.0, np.inf)
+    temp_bins: Sequence[float] = (-np.inf, 35.2, np.inf)
     temp_labels: Sequence[str] = ("<35°C", "≥35°C")
 
     # Scatter control

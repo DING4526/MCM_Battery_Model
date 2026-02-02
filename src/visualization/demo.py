@@ -86,7 +86,7 @@ def main():
     )
     parser.add_argument(
         "--out",
-        default=str(_repo_root() / "output/04_single_device_visualization"),
+        default=str(_repo_root() / "output/00_all"),
     )
     parser.add_argument(
         "--quantiles",
@@ -109,8 +109,8 @@ def main():
     parser.add_argument(
         "--n_devices",
         type=int,
-        default=10,
-        help="How many devices to render from timeseries_dir (sorted). Default: 10",
+        default=20,
+        help="How many devices to render from timeseries_dir (sorted). Default: 20",
     )
     args = parser.parse_args()
 
@@ -130,145 +130,137 @@ def main():
     thresholds = _compute_quantile_thresholds(df[ttl_col], quantiles)
     threshold_label = _format_threshold_label(quantiles)
 
-    # # ============================================================
-    # # 0. Overall population
-    # # ============================================================
-    # cfg_overall = LifetimePlotConfig(
-    #     ttl_col=ttl_col,
-    #     vlines_hours=thresholds,
-    #     vlines_label=threshold_label,
-    #     title_prefix="Population Lifetime Distribution",
-    # )
+    # ============================================================
+    # 0. Overall population
+    # ============================================================
+    cfg_overall = LifetimePlotConfig(
+        ttl_col=ttl_col,
+        vlines_hours=thresholds,
+        vlines_label=threshold_label,
+        title_prefix="Population Lifetime Distribution",
+    )
 
-    # plot_population_lifetime_distribution(
-    #     df, kind="kde", stratify="none",
-    #     cfg=cfg_overall,
-    #     save_path=str(out / "overall_kde.pdf"),
-    #     show=False,
-    # )
-    # plot_population_lifetime_distribution(
-    #     df, kind="ecdf", stratify="none",
-    #     cfg=cfg_overall,
-    #     save_path=str(out / "overall_ecdf.pdf"),
-    #     show=False,
-    # )
-
-    # # ============================================================
-    # # 1. By Active Usage Intensity (MAIN RESULT)
-    # # ============================================================
-    # df = add_usage_intensity_group(df)
-
-    # cfg_intensity = LifetimePlotConfig(
-    #     ttl_col=ttl_col,
-    #     usage_state_col="usage_intensity_group",
-    #     legend_title_usage="Active Usage Intensity",
-    #     vlines_hours=thresholds,
-    #     vlines_label=threshold_label,
-    #     title_prefix="Lifetime by Active Usage Intensity",
-    # )
-
-    # plot_population_lifetime_distribution(
-    #     df, kind="kde", stratify="usage_dominant_state",
-    #     cfg=cfg_intensity,
-    #     save_path=str(out / "by_intensity_kde.pdf"),
-    #     show=False,
-    # )
-    # plot_population_lifetime_distribution(
-    #     df, kind="ecdf", stratify="usage_dominant_state",
-    #     cfg=cfg_intensity,
-    #     save_path=str(out / "by_intensity_ecdf.pdf"),
-    #     show=False,
-    # )
-
-    # # ============================================================
-    # # 2. By Device Aging (CONTROL / CONTEXT)
-    # # ============================================================
-    # cfg_age = LifetimePlotConfig(
-    #     ttl_col=ttl_col,
-    #     device_age_col="device_age_months",
-    #     legend_title_age="Device Age",
-    #     vlines_hours=thresholds,
-    #     vlines_label=threshold_label,
-    #     title_prefix="Lifetime by Device Age",
-    # )
-
-    # plot_population_lifetime_distribution(
-    #     df, kind="kde", stratify="device_age_months",
-    #     cfg=cfg_age,
-    #     save_path=str(out / "by_age_kde.pdf"),
-    #     show=False,
-    # )
-    # plot_population_lifetime_distribution(
-    #     df, kind="ecdf", stratify="device_age_months",
-    #     cfg=cfg_age,
-    #     save_path=str(out / "by_age_ecdf.pdf"),
-    #     show=False,
-    # )
-
-    # # ============================================================
-    # # 3. Supporting: Usage composition
-    # # ============================================================
-    # comp_cfg = UsageCompositionConfig(
-    #     group_col="usage_intensity_group",
-    #     title="Usage Composition within Intensity Groups",
-    # )
-    # plot_active_composition_stacked_bar(
-    #     df,
-    #     cfg=comp_cfg,
-    #     save_path=str(out / "usage_composition_by_intensity.pdf"),
-    #     show=False,
-    # )
-
-    # # ============================================================
-    # # 4. Aging × Temperature interaction (INSIGHT FIGURE)
-    # # ============================================================
-
-    # from .aging_temperature import (
-    #     plot_aging_temperature_interaction_single,
-    #     AgingTemperatureSingleConfig,
-    # )
-
-    # at_cfg = AgingTemperatureSingleConfig(
-    #     age_col="device_age_months",
-    #     ttl_col=ttl_col,
-    #     temp_col="avg_battery_temp_celsius",
-    #     max_points=500,
-    #     figsize=(6.8, 4.8),
-    # )
-
-    # plot_aging_temperature_interaction_single(
-    #     df,
-    #     cfg=at_cfg,
-    #     save_path=str(out / "aging_temperature_interaction_single.pdf"),
-    #     show=False,
-    # )
-
-    # # ============================================================
-    # # 5. Who consumes energy? (Power structure boxplot)
-    # # ============================================================
-
-    # from .power_structure_boxplot import (
-    #     plot_power_structure_boxplot,
-    #     PowerStructureBoxplotConfig,
-    # )
-
-    # ps_cfg = PowerStructureBoxplotConfig(
-    #     figsize=(6.6, 4.2),
-    # )
-
-    # plot_power_structure_boxplot(
-    #     df,
-    #     cfg=ps_cfg,
-    #     save_path=str(out / "who_consumes_energy_boxplot.pdf"),
-    #     show=False,
-    # )
+    plot_population_lifetime_distribution(
+        df, kind="kde", stratify="none",
+        cfg=cfg_overall,
+        save_path=str(out / "overall_kde.pdf"),
+        show=False,
+    )
+    plot_population_lifetime_distribution(
+        df, kind="ecdf", stratify="none",
+        cfg=cfg_overall,
+        save_path=str(out / "overall_ecdf.pdf"),
+        show=False,
+    )
 
     # ============================================================
-    # Single-device compact dynamics figures (batch)
+    # 1. By Active Usage Intensity (MAIN RESULT)
     # ============================================================
-    from .device_timeseries_compact import (
-        plot_device_timeseries_compact,
-        DeviceTimeseriesCompactConfig,
+    df = add_usage_intensity_group(df)
+
+    cfg_intensity = LifetimePlotConfig(
+        ttl_col=ttl_col,
+        usage_state_col="usage_intensity_group",
+        legend_title_usage="Active Usage Intensity",
+        vlines_hours=thresholds,
+        vlines_label=threshold_label,
+        title_prefix="Lifetime by Active Usage Intensity",
+    )
+
+    plot_population_lifetime_distribution(
+        df, kind="kde", stratify="usage_dominant_state",
+        cfg=cfg_intensity,
+        save_path=str(out / "by_intensity_kde.pdf"),
+        show=False,
+    )
+    plot_population_lifetime_distribution(
+        df, kind="ecdf", stratify="usage_dominant_state",
+        cfg=cfg_intensity,
+        save_path=str(out / "by_intensity_ecdf.pdf"),
+        show=False,
+    )
+
+    # ============================================================
+    # 2. By Device Aging (CONTROL / CONTEXT)
+    # ============================================================
+    cfg_age = LifetimePlotConfig(
+        ttl_col=ttl_col,
+        device_age_col="device_age_months",
+        legend_title_age="Device Age",
+        vlines_hours=thresholds,
+        vlines_label=threshold_label,
+        title_prefix="Lifetime by Device Age",
+    )
+
+    plot_population_lifetime_distribution(
+        df, kind="kde", stratify="device_age_months",
+        cfg=cfg_age,
+        save_path=str(out / "by_age_kde.pdf"),
+        show=False,
+    )
+    plot_population_lifetime_distribution(
+        df, kind="ecdf", stratify="device_age_months",
+        cfg=cfg_age,
+        save_path=str(out / "by_age_ecdf.pdf"),
+        show=False,
+    )
+
+    # ============================================================
+    # 3. Supporting: Usage composition
+    # ============================================================
+    comp_cfg = UsageCompositionConfig(
+        group_col="usage_intensity_group",
+        title="Usage Composition within Intensity Groups",
+    )
+    plot_active_composition_stacked_bar(
+        df,
+        cfg=comp_cfg,
+        save_path=str(out / "usage_composition_by_intensity.pdf"),
+        show=False,
+    )
+
+    # ============================================================
+    # 4. Aging × Temperature interaction (INSIGHT FIGURE)
+    # ============================================================
+
+    from .aging_temperature import (
+        plot_aging_temperature_interaction_single,
+        AgingTemperatureSingleConfig,
+    )
+
+    at_cfg = AgingTemperatureSingleConfig(
+        age_col="device_age_months",
+        ttl_col=ttl_col,
+        temp_col="avg_battery_temp_celsius",
+        max_points=500,
+        figsize=(6.8, 4.8),
+    )
+
+    plot_aging_temperature_interaction_single(
+        df,
+        cfg=at_cfg,
+        save_path=str(out / "aging_temperature_interaction_single.pdf"),
+        show=False,
+    )
+
+    # ============================================================
+    # 5. Who consumes energy? (Power structure boxplot)
+    # ============================================================
+
+    from .power_structure_boxplot import (
+        plot_power_structure_boxplot,
+        PowerStructureBoxplotConfig,
+    )
+
+    ps_cfg = PowerStructureBoxplotConfig(
+        figsize=(6.6, 4.2),
+    )
+
+    plot_power_structure_boxplot(
+        df,
+        cfg=ps_cfg,
+        save_path=str(out / "who_consumes_energy_boxplot.pdf"),
+        show=False,
     )
 
     ts_dir = Path(args.timeseries_dir)
@@ -286,6 +278,14 @@ def main():
             print("[WARN] --n_devices <= 0, nothing to render.")
             return
         ts_paths = all_ts[:n]
+
+    # ============================================================
+    # Single-device compact dynamics figures (batch)
+    # ============================================================
+    from .device_timeseries_compact import (
+        plot_device_timeseries_compact,
+        DeviceTimeseriesCompactConfig,
+    )
 
     # Output folder for batch
     out_ts = out / "single_device_dynamics"
@@ -327,6 +327,39 @@ def main():
             "idx\tDevice_ID\tfile\n" + "\n".join(index_lines) + "\n",
             encoding="utf-8",
         )
+
+    # ============================================================
+    # SOC Counterfactual (ablation) figures (batch)
+    # ============================================================
+    from .soc_counterfactual import (
+        plot_soc_counterfactual,
+        SOCCounterfactualConfig,
+    )
+
+    out_cf = out / "soc_counterfactual"
+    out_cf.mkdir(parents=True, exist_ok=True)
+
+    cf_cfg = SOCCounterfactualConfig(
+        figsize=(9.2, 4.2),          # 还想更宽就再加
+        baseline="uncorrected",
+        show_error_fill=True,
+        show_error_axis=True,
+        legend_outside=True,
+    )
+
+    for i, ts_path in enumerate(ts_paths, start=1):
+        if not ts_path.exists():
+            continue
+        device_id = ts_path.stem
+        save_pdf = out_cf / f"{i:02d}_{device_id}_soc_counterfactual.pdf"
+
+        plot_soc_counterfactual(
+            str(ts_path),
+            cfg=cf_cfg,
+            save_path=str(save_pdf),
+            show=False,
+        )
+        print(f"[OK] ({i}/{len(ts_paths)}) Saved: {save_pdf}")
 
 
     print(f"[OK] Saved lifetime figures to: {out.resolve()}")

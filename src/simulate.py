@@ -51,10 +51,11 @@ def run_simulation(
     # ===== 新增：人群模拟/数据驱动注入 =====
     usage_states_override: Optional[Dict[str, Dict[str, float]]] = None,
     device_params_override: Optional[Dict[str, float]] = None,
+    battery_params_override: Optional[Dict[str, float]] = None,
     battery_capacity_mah: Optional[float] = None,
     battery_aging_loss: Optional[float] = None,
     fixed_dwell_sec: int = 15 * 60,
-    dwell_mode: str = "fixed",  # "fixed" or "random"（随机驻留时间用于以后升级）
+    dwell_mode: str = "hsmm",  # "fixed" or "random"（随机驻留时间用于以后升级）
 ):
     """
     单次运行仿真直到电池耗尽
@@ -117,12 +118,18 @@ def run_simulation(
     # ---------- 初始化电池（带修正：OCV+温度+老化） ----------
     aging_loss = 0.15 if battery_aging_loss is None else float(battery_aging_loss)
 
-    battery = BatteryModel(
-        SOC0=1.0,
-        Tb0=298.15,
-        aging_loss=aging_loss,
-        capacity_Ah=cap_ah if cap_ah is not None else 5.0,
-    )
+    battery_kwargs = {
+        "SOC0": 1.0,
+        "Tb0": 298.15,
+        "aging_loss": aging_loss,
+        "capacity_Ah": cap_ah if cap_ah is not None else 5.0,
+    }
+
+    # 允许外部覆盖 BatteryModel 的任意构造参数：alpha/h/C_th/eta_heat/T_ref/ocv_params/v_min/v_max...
+    if battery_params_override:
+        battery_kwargs.update(battery_params_override)
+
+    battery = BatteryModel(**battery_kwargs)
 
     # ---------- 初始化对比电池（可选） ----------
     if record_uncorrected:

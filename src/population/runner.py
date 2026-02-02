@@ -369,7 +369,7 @@ if __name__ == "__main__":
 
         # ===== 每隔多少台设备保存一次过程性 JSON =====
         save_timeseries=True,
-        save_every=500,
+        save_every=200,
 
         # ===== resume =====
         resume=False,
