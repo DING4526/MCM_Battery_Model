@@ -13,9 +13,10 @@ from plotly.subplots import make_subplots
 import numpy as np
 
 from .config import (
-    COLORS, STATE_COLORS, DEFAULT_COLORS,
+    COLORS, STATE_COLORS, DEFAULT_COLORS, POWER_BREAKDOWN_COLORS,
     FONT_SIZES, LINE_WIDTHS, FIGURE_SIZES,
     to_hours, get_show_plots, save_plotly_figure,
+    hex_to_rgba,
     setup_style,
 )
 
@@ -428,52 +429,96 @@ def plot_comprehensive_dashboard(result, save_path=None, T_amb=298.15, show=None
 
 
 # =====================================================
-# 复合图表：温度 + 功耗堆叠图 + 状态时间线
+# 复合图表：系统分析图（温度 + 功耗分解 + 状态时间线）
+# 设计理念：紧凑、整体化、论文级系统分析导向
 # =====================================================
 
 def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=None):
     """
-    绘制复合图表：温度 + 功耗堆叠图 + 状态时间线
+    绘制系统分析复合图：温度 + 功耗分解 + 状态时间线
+    
+    设计特点：
+    - 共享时间轴，紧凑纵向布局
+    - 温度图：折线+轻填充+阈值线
+    - 功耗图：堆叠面积+边界线区分
+    - 状态图：纯色块，最低认知负担
+    - 图例分布在各自子图区域
+    - 深沉低饱和配色
     """
-    time_h = to_hours(result["time"])
-    temp_c = [tb - 273.15 for tb in result["Tb"]]
+    time_h = np.array(to_hours(result["time"]))
+    temp_c = np.array([tb - 273.15 for tb in result["Tb"]])
     T_amb_c = T_amb - 273.15
     states = result["State"]
+    ttl_hours = result["TTL"] / 3600
+    max_time = max(time_h)
     
+    # 创建紧凑子图布局（压缩纵向比例）
     fig = make_subplots(
         rows=3, cols=1,
-        subplot_titles=("电池温度", "系统功耗分解", "使用状态"),
-        row_heights=[0.32, 0.42, 0.18],
-        vertical_spacing=0.10,
+        row_heights=[0.38, 0.48, 0.14],
+        vertical_spacing=0.02,
         shared_xaxes=True,
     )
     
-    # 1. 温度曲线
+    # ========== 1. 温度曲线（折线+轻填充+阈值线） ==========
+    
+    # 环境温度参考线填充（极淡）
+    fig.add_trace(go.Scatter(
+        x=time_h, y=[T_amb_c] * len(time_h),
+        mode='lines', name='',
+        line=dict(width=0),
+        showlegend=False,
+        hoverinfo='skip',
+    ), row=1, col=1)
+    
+    # 电池温度曲线（带轻填充到环境温度）
     fig.add_trace(go.Scatter(
         x=time_h, y=temp_c,
         mode='lines', name='电池温度',
-        line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
+        line=dict(color=COLORS["secondary"], width=2.0),
         fill='tonexty',
-        fillcolor='rgba(192, 57, 43, 0.12)',
+        fillcolor=hex_to_rgba(COLORS["secondary"], 0.08),
+        showlegend=False,
     ), row=1, col=1)
     
-    fig.add_hline(y=T_amb_c, line_dash="dash", line_color=COLORS["neutral"],
-                  line_width=1, row=1, col=1)
-    fig.add_hline(y=45, line_dash="dot", line_color=COLORS["danger"],
-                  line_width=1, row=1, col=1)
+    # 环境温度参考线（虚线）
+    fig.add_hline(
+        y=T_amb_c, line_dash="dash", line_color=COLORS["neutral"],
+        line_width=1.0, row=1, col=1,
+    )
+    # 环境温度标注（使用 trace 坐标）
+    fig.add_trace(go.Scatter(
+        x=[max_time * 0.03], y=[T_amb_c + 1],
+        mode='text',
+        text=[f'环境 {T_amb_c:.0f}°C'],
+        textfont=dict(size=7, color=COLORS["neutral"]),
+        textposition='middle right',
+        showlegend=False,
+        hoverinfo='skip',
+    ), row=1, col=1)
     
-    # 2. 功耗堆叠图
+    # 高温警戒线（45°C）
+    if max(temp_c) > 40:
+        fig.add_hline(
+            y=45, line_dash="dot", line_color=COLORS["danger"],
+            line_width=1.0, row=1, col=1,
+        )
+        fig.add_trace(go.Scatter(
+            x=[max_time * 0.03], y=[46],
+            mode='text',
+            text=['警戒 45°C'],
+            textfont=dict(size=7, color=COLORS["danger"]),
+            textposition='middle right',
+            showlegend=False,
+            hoverinfo='skip',
+        ), row=1, col=1)
+    
+    # ========== 2. 功耗分解图（堆叠面积+边界线区分） ==========
+    
     has_breakdown = "Power_screen" in result
     
     if has_breakdown:
-        breakdown_colors = {
-            "屏幕": "#7F8C8D",
-            "CPU": "#27AE60",
-            "无线通信": "#2980B9",
-            "GPS": "#D35400",
-            "后台": "#8E44AD",
-        }
-        
+        # 堆叠顺序：从底部到顶部
         layers = [
             ("后台", result["Power_background"]),
             ("GPS", result["Power_gps"]),
@@ -482,13 +527,23 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
             ("屏幕", result["Power_screen"]),
         ]
         
+        # 线型样式（通过边界线区分，而非仅颜色）
+        line_styles = {
+            "后台": dict(width=0.8, color="#3A3A4A", dash="dot"),
+            "GPS": dict(width=0.8, color="#5A4B3A"),
+            "无线通信": dict(width=0.8, color="#3A4B5A"),
+            "CPU": dict(width=0.8, color="#3A5B4C"),
+            "屏幕": dict(width=1.0, color="#4B5B6C"),
+        }
+        
         for name, data in layers:
             fig.add_trace(go.Scatter(
                 x=time_h, y=data,
                 mode='lines', name=name,
                 stackgroup='power',
-                fillcolor=breakdown_colors[name],
-                line=dict(width=0.3, color='white'),
+                fillcolor=hex_to_rgba(POWER_BREAKDOWN_COLORS[name], 0.75),
+                line=line_styles[name],
+                showlegend=False,
             ), row=2, col=1)
         
         total_power = (np.array(result["Power_screen"]) +
@@ -497,26 +552,59 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
                       np.array(result["Power_gps"]) +
                       np.array(result["Power_background"]))
         avg_power = np.mean(total_power)
+        max_power = np.max(total_power)
+        
+        # 功耗模块图例（图内右侧，确保不被截断）
+        legend_y_positions = [max_power * 0.92, max_power * 0.80, max_power * 0.68, 
+                              max_power * 0.56, max_power * 0.44]
+        layer_names = ["屏幕", "CPU", "通信", "GPS", "后台"]
+        for i, name in enumerate(layer_names):
+            full_name = "无线通信" if name == "通信" else name
+            fig.add_trace(go.Scatter(
+                x=[max_time * 0.88], y=[legend_y_positions[i]],
+                mode='text',
+                text=[f'■{name}'],
+                textfont=dict(size=7, color=POWER_BREAKDOWN_COLORS[full_name]),
+                textposition='middle right',
+                showlegend=False,
+                hoverinfo='skip',
+            ), row=2, col=1)
     else:
         power = np.array(result["Power"])
         fig.add_trace(go.Scatter(
             x=time_h, y=power,
             mode='lines', name='总功耗',
             fill='tozeroy',
-            fillcolor='rgba(192, 57, 43, 0.2)',
-            line=dict(color=COLORS["secondary"], width=LINE_WIDTHS["main"]),
+            fillcolor=hex_to_rgba(COLORS["secondary"], 0.15),
+            line=dict(color=COLORS["secondary"], width=1.5),
+            showlegend=False,
         ), row=2, col=1)
         avg_power = np.mean(power)
+        max_power = np.max(power)
     
-    fig.add_hline(y=avg_power, line_dash="dash", line_color=COLORS["primary"],
-                  line_width=1, row=2, col=1)
+    # 平均功耗参考线
+    fig.add_hline(
+        y=avg_power, line_dash="dash", line_color=COLORS["primary"],
+        line_width=1.0, row=2, col=1,
+    )
+    fig.add_trace(go.Scatter(
+        x=[max_time * 0.03], y=[avg_power + 0.15],
+        mode='text',
+        text=[f'均值 {avg_power:.2f}W'],
+        textfont=dict(size=7, color=COLORS["primary"]),
+        textposition='middle right',
+        showlegend=False,
+        hoverinfo='skip',
+    ), row=2, col=1)
     
-    # 3. 状态时间线
+    # ========== 3. 状态时间线（纯色块，最低认知负担） ==========
+    
     unique_states = []
     for s in states:
         if s not in unique_states:
             unique_states.append(s)
     
+    # 绘制状态色块
     prev_state = states[0]
     start_time = time_h[0]
     
@@ -530,52 +618,75 @@ def plot_composite_power_temperature(result, save_path=None, T_amb=298.15, show=
                 type="rect",
                 x0=start_time, x1=end_t, y0=0, y1=1,
                 fillcolor=color,
-                opacity=0.85,
+                opacity=0.9,
                 line_width=0,
                 row=3, col=1,
             )
             start_time = t
             prev_state = state
     
-    # 状态图例
-    for state in unique_states:
+    # 状态图例（底部水平排列，使用 paper 坐标）
+    n_states = len(unique_states)
+    for i, state in enumerate(unique_states):
         color = STATE_COLORS.get(state, COLORS["neutral"])
-        fig.add_trace(go.Scatter(
-            x=[None], y=[None],
-            mode='markers',
-            marker=dict(size=10, color=color, symbol='square'),
-            name=state,
-            showlegend=True,
-        ))
+        x_pos = 0.08 + i * (0.85 / n_states)
+        fig.add_annotation(
+            x=x_pos, y=-0.02,
+            xref="paper", yref="paper",
+            text=f"■ {state}",
+            showarrow=False,
+            font=dict(size=7, color=color),
+            xanchor="left",
+        )
     
-    # 布局
-    ttl_hours = result["TTL"] / 3600
-    width, height = FIGURE_SIZES["composite"]
+    # ========== 布局设置 ==========
     
-    fig.update_layout(
-        title=dict(
-            text=f"电池仿真综合分析 | 续航: {ttl_hours:.2f} h",
-            font=dict(size=FONT_SIZES["title"]),
-            y=0.98,
-        ),
-        width=width,
-        height=height,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.10,
-            xanchor="center",
-            x=0.5,
-            font=dict(size=FONT_SIZES["legend"]),
-        ),
-        margin=dict(l=55, r=20, t=65, b=80),
+    # 标题采用小字号右上角标注形式
+    fig.add_annotation(
+        x=0.95, y=1.01,
+        xref="paper", yref="paper",
+        text=f"续航 {ttl_hours:.2f} h | 均值功耗 {avg_power:.2f} W",
+        showarrow=False,
+        font=dict(size=9, color=COLORS["primary"]),
+        xanchor="right",
     )
     
-    fig.update_yaxes(title_text="温度 (°C)", row=1, col=1)
-    fig.update_yaxes(title_text="功耗 (W)", row=2, col=1)
-    fig.update_yaxes(showticklabels=False, showgrid=False, row=3, col=1)
-    fig.update_xaxes(title_text="时间 (小时)", row=3, col=1)
+    # 紧凑布局（增加右侧边距以容纳图例）
+    fig.update_layout(
+        width=700,
+        height=520,
+        margin=dict(l=50, r=45, t=22, b=38),
+        showlegend=False,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+    )
     
+    # Y轴标签（侧边小字号）
+    fig.update_yaxes(
+        title_text="温度(°C)", title_font_size=9, title_standoff=5,
+        tickfont_size=8, row=1, col=1,
+        showgrid=True, gridwidth=0.5, gridcolor="rgba(100,100,100,0.15)",
+    )
+    fig.update_yaxes(
+        title_text="功耗(W)", title_font_size=9, title_standoff=5,
+        tickfont_size=8, row=2, col=1,
+        showgrid=True, gridwidth=0.5, gridcolor="rgba(100,100,100,0.15)",
+    )
+    fig.update_yaxes(
+        showticklabels=False, showgrid=False, row=3, col=1,
+        range=[0, 1], fixedrange=True,
+    )
+    
+    # X轴（共享时间轴，仅底部显示刻度和标签）
+    fig.update_xaxes(showticklabels=False, row=1, col=1)
+    fig.update_xaxes(showticklabels=False, row=2, col=1)
+    fig.update_xaxes(
+        title_text="时间 (小时)", title_font_size=9, title_standoff=3,
+        tickfont_size=8, row=3, col=1,
+        showgrid=True, gridwidth=0.5, gridcolor="rgba(100,100,100,0.2)",
+    )
+    
+    # 保存（静态格式）
     if save_path:
         save_plotly_figure(fig, save_path, size_type="composite")
     

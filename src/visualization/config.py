@@ -34,7 +34,7 @@ FIGURE_SIZES = {
     "square": (600, 550),
     "tall": (700, 600),
     "timeline": (700, 250),
-    "composite": (700, 800),
+    "composite": (700, 520),   # 紧凑复合图
 }
 
 # 字体大小（论文适配）
@@ -122,51 +122,63 @@ def get_save_path(filename, subdir=""):
 
 
 # =====================================================
-# 配色方案（论文级专业配色 - 打印友好）
+# 配色方案（论文级专业配色 - 深沉低饱和）
 # =====================================================
 
 COLORS = {
-    "primary": "#2C3E50",
-    "secondary": "#C0392B",
-    "accent": "#2980B9",
-    "success": "#27AE60",
-    "danger": "#E74C3C",
-    "neutral": "#7F8C8D",
-    "warning": "#D35400",
+    "primary": "#34495E",      # 深蓝灰
+    "secondary": "#8B4513",    # 深棕色（温度）
+    "accent": "#2C5F7C",       # 深青蓝
+    "success": "#3D6B4F",      # 深绿
+    "danger": "#A0522D",       # 褐红色
+    "neutral": "#5D6D7E",      # 中灰蓝
+    "warning": "#8B6914",      # 深金色
 }
 
+# 使用状态配色（低饱和、高区分度）
 STATE_COLORS = {
-    "DeepIdle": "#95A5A6",
-    "Social": "#3498DB",
-    "Video": "#8E44AD",
-    "Gaming": "#C0392B",
-    "Navigation": "#D35400",
-    "Camera": "#16A085",
+    "DeepIdle": "#7B8A8B",     # 灰色
+    "Social": "#4A6F8A",       # 暗蓝
+    "Video": "#6B4F7A",        # 暗紫
+    "Gaming": "#8B4D4D",       # 暗红
+    "Navigation": "#7A6332",   # 暗黄棕
+    "Camera": "#3D7A6B",       # 暗青绿
 }
 
+# 场景配色
 SCENARIO_COLORS = {
-    "Student Daily": "#2980B9",
-    "学生日常": "#2980B9",
-    "Commute": "#C0392B",
-    "通勤": "#C0392B",
-    "Weekend": "#8E44AD",
-    "周末娱乐": "#8E44AD",
-    "Travel": "#27AE60",
-    "旅行": "#27AE60",
-    "DeepIdle Only": "#7F8C8D",
-    "纯待机": "#7F8C8D",
-    "Gaming Only": "#E74C3C",
-    "纯游戏": "#E74C3C",
-    "Video Only": "#9B59B6",
-    "纯视频": "#9B59B6",
-    "Navigation Only": "#D35400",
-    "纯导航": "#D35400",
+    "Student Daily": "#4A6F8A",
+    "学生日常": "#4A6F8A",
+    "Commute": "#8B4D4D",
+    "通勤": "#8B4D4D",
+    "Weekend": "#6B4F7A",
+    "周末娱乐": "#6B4F7A",
+    "Travel": "#3D7A6B",
+    "旅行": "#3D7A6B",
+    "DeepIdle Only": "#7B8A8B",
+    "纯待机": "#7B8A8B",
+    "Gaming Only": "#8B4D4D",
+    "纯游戏": "#8B4D4D",
+    "Video Only": "#6B4F7A",
+    "纯视频": "#6B4F7A",
+    "Navigation Only": "#7A6332",
+    "纯导航": "#7A6332",
 }
 
+# 默认颜色序列（低饱和专业色）
 DEFAULT_COLORS = [
-    "#2980B9", "#C0392B", "#27AE60", "#8E44AD",
-    "#D35400", "#16A085", "#2C3E50", "#7F8C8D",
+    "#4A6F8A", "#8B4D4D", "#3D7A6B", "#6B4F7A",
+    "#7A6332", "#5D6D7E", "#34495E", "#7B8A8B",
 ]
+
+# 功耗分解配色（深沉低饱和，通过明度区分层级）
+POWER_BREAKDOWN_COLORS = {
+    "屏幕": "#6B7B8C",       # 浅灰蓝（最上层，明度最高）
+    "CPU": "#4A6B5C",        # 深绿灰
+    "无线通信": "#5A6B7C",   # 中灰蓝
+    "GPS": "#7A6B4A",        # 棕灰
+    "后台": "#5A5A6A",       # 暗灰紫（最底层，明度最低）
+}
 
 PARAM_LABELS = {
     "u": "屏幕亮度",
@@ -296,7 +308,7 @@ def smart_savefig(filename, subdir="", dpi=300):
 
 def save_plotly_figure(fig, filename, subdir="", size_type="default"):
     """
-    保存 Plotly 图表（同时保存 HTML、PNG、PDF）
+    保存 Plotly 图表（静态格式：PNG 和 PDF）
     
     参数：
         fig : Figure - 图表对象
@@ -312,14 +324,7 @@ def save_plotly_figure(fig, filename, subdir="", size_type="default"):
     
     saved_paths = {}
     
-    # HTML（交互式）
-    html_path = get_save_path(f"{base_name}.html", subdir)
-    fig.write_html(html_path, include_plotlyjs="cdn", full_html=True,
-                   config={'displayModeBar': True, 'displaylogo': False})
-    saved_paths["html"] = html_path
-    print(f"[Save] HTML: {html_path}")
-    
-    # PNG（高清）
+    # PNG（高清静态图）
     png_path = get_save_path(f"{base_name}.png", subdir)
     try:
         fig.write_image(png_path, width=width, height=height, scale=2)
@@ -329,7 +334,7 @@ def save_plotly_figure(fig, filename, subdir="", size_type="default"):
         print(f"[Warning] PNG 导出失败: {e}")
         print("  提示: 请确保已安装 kaleido: pip install kaleido")
     
-    # PDF（矢量）
+    # PDF（矢量格式，适合论文）
     pdf_path = get_save_path(f"{base_name}.pdf", subdir)
     try:
         fig.write_image(pdf_path, width=width, height=height, scale=2)

@@ -16,6 +16,7 @@ from .config import (
     get_color_with_alpha,
     COLORS,
     STATE_COLORS,
+    POWER_BREAKDOWN_COLORS,
     PARAM_LABELS,
     FIGURE_SIZES,
     FONT_SIZES,

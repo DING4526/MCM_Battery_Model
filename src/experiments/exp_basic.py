@@ -116,12 +116,12 @@ def run_basic_experiment(
     if verbose:
         out_path = get_output_dir(output_dir)
         print(f"图表已保存到 {out_path}/ 目录")
-        print("  - soc_curve.{html,png,pdf}")
-        print("  - power_curve.{html,png,pdf}")
-        print("  - temperature_curve.{html,png,pdf}")
-        print("  - state_timeline.{html,png,pdf}")
-        print("  - composite_power_temperature.{html,png,pdf}")
-        print("  - soc_comparison.{html,png,pdf}")
+        print("  - soc_curve.{png,pdf}")
+        print("  - power_curve.{png,pdf}")
+        print("  - temperature_curve.{png,pdf}")
+        print("  - state_timeline.{png,pdf}")
+        print("  - composite_power_temperature.{png,pdf}")
+        print("  - soc_comparison.{png,pdf}")
     
     return result
 
